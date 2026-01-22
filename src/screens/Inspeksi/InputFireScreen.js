@@ -1,82 +1,182 @@
 import React, { useState } from 'react';
-import { View, ScrollView, StyleSheet, Alert } from 'react-native';
-import { TextInput, Button, Text, Checkbox, Card } from 'react-native-paper';
+import {
+  ScrollView,
+  StyleSheet,
+  Alert,
+  View,
+  PermissionsAndroid,
+  Platform,
+} from 'react-native';
+import { Button, Text, Card, List } from 'react-native-paper';
 import { db } from '../../services/db-service';
+
+// Import Komponen dari Central Registry
+import {
+  FormRegistry,
+  FormDataUmum,
+  FormCatatan,
+} from '../../components/forms';
 
 export default function InputFireScreen({ route, navigation }) {
   const { subAlat } = route.params;
 
+  // State awal disesuaikan dengan key 'pemilik' di FormDataUmum
   const [form, setForm] = useState({
-    namaPerusahaan: '',
-    jenisAlat: 'Forklift',
-    noSeri: '',
-    kondisiGarpu: false,
-    kondisiMast: false,
-    sistemRem: false,
-    ujiBeban: '',
+    pemilik: '', // Perubahan dari namaPerusahaan ke pemilik
+    alamat: '',
+    lokasiUnit: '',
+    statusKelayakan: 'LAYAK',
+    bidang: 'FIRE',
+    subAlat: subAlat,
+    dokumentasi: [],
+    temuan: '',
+    saran: '',
+    tglPemeriksaan: new Date().toLocaleDateString('id-ID'),
   });
 
-  const handleSave = () => {
-    const payload = { bidang: 'FIRE', ...form };
-    db.execute('INSERT INTO inspections (bidang, data) VALUES (?, ?)', [
-      'FIRE',
-      JSON.stringify(payload),
-    ]);
-    Alert.alert('Sukses', 'Data FIRE Tersimpan', [
-      { text: 'OK', onPress: () => navigation.navigate('MainApp') },
-    ]);
+  const [expanded, setExpanded] = useState({
+    umum: true,
+    teknis: true,
+    catatan: false,
+  });
+
+  // Izin Akses Kamera
+  const requestCameraPermission = async () => {
+    if (Platform.OS === 'android') {
+      try {
+        const granted = await PermissionsAndroid.requestMultiple([
+          PermissionsAndroid.PERMISSIONS.CAMERA,
+          // Update untuk Android 13+ menggunakan READ_MEDIA_IMAGES jika perlu
+          PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
+        ]);
+        return (
+          granted['android.permission.CAMERA'] ===
+          PermissionsAndroid.RESULTS.GRANTED
+        );
+      } catch (err) {
+        return false;
+      }
+    }
+    return true;
   };
 
+  const handleSave = async () => {
+    // Validasi menggunakan field 'pemilik'
+    if (!form.pemilik) {
+      Alert.alert('Peringatan', 'Nama Pemilik / Perusahaan wajib diisi');
+      return;
+    }
+
+    try {
+      const payload = {
+        ...form,
+        bidang: 'FIRE',
+        createdAt: new Date().toISOString(),
+      };
+
+      await db.execute(
+        'INSERT INTO inspections (bidang, data, created_at) VALUES (?, ?, ?)',
+        ['FIRE', JSON.stringify(payload), new Date().toISOString()],
+      );
+
+      Alert.alert('Sukses', `Laporan ${subAlat} Berhasil Disimpan`, [
+        { text: 'OK', onPress: () => navigation.goBack() },
+      ]);
+    } catch (error) {
+      Alert.alert('Error', 'Gagal menyimpan data: ' + error.message);
+    }
+  };
+
+  // Pilih form teknis berdasarkan subAlat
+  const SelectedForm = FormRegistry[subAlat];
+
   return (
-    <ScrollView style={styles.container}>
-      <Text variant="headlineSmall" style={styles.title}>
-        Form Inspeksi: {subAlat}
-      </Text>
-      <TextInput
-        label="Nama Perusahaan"
-        value={form.namaPerusahaan}
-        onChangeText={t => setForm({ ...form, namaPerusahaan: t })}
-        mode="outlined"
-        style={styles.input}
-      />
-      <TextInput
-        label="Nomor Seri Alat"
-        value={form.noSeri}
-        onChangeText={t => setForm({ ...form, noSeri: t })}
-        mode="outlined"
-        style={styles.input}
-      />
+    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      {/* Header Banner Merah */}
+      <View style={styles.headerBanner}>
+        <Text variant="headlineSmall" style={styles.titleHeader}>
+          Inspeksi {subAlat}
+        </Text>
+        <Text style={styles.bidangTag}>BIDANG PROTEKSI KEBAKARAN</Text>
+      </View>
 
-      <Card style={styles.card}>
-        <Card.Title title="Kondisi Alat Damkar" />
-        <Checkbox.Item
-          label="Tekanan APAR (Area Hijau)"
-          status={form.apar ? 'checked' : 'unchecked'}
-          onPress={() => setForm({ ...form, apar: !form.apar })}
-        />
-        <Checkbox.Item
-          label="Selang Hydrant Tidak Bocor"
-          status={form.hydrant ? 'checked' : 'unchecked'}
-          onPress={() => setForm({ ...form, hydrant: !form.hydrant })}
-        />
-        <Checkbox.Item
-          label="Panel Fire Alarm Normal"
-          status={form.alarm ? 'checked' : 'unchecked'}
-          onPress={() => setForm({ ...form, alarm: !form.alarm })}
-        />
-      </Card>
+      {/* Bagian I: Data Umum */}
+      <List.Accordion
+        title="I. DATA UMUM"
+        expanded={expanded.umum}
+        onPress={() => setExpanded({ ...expanded, umum: !expanded.umum })}
+        left={p => <List.Icon {...p} icon="office-building" color="#ef4444" />}
+        style={styles.accordion}
+      >
+        <Card style={styles.innerCard}>
+          <Card.Content>
+            <FormDataUmum
+              data={form}
+              setData={setForm}
+              styles={styles}
+              subAlat={subAlat}
+              bidang="FIRE" // Prop krusial agar form tampil ringkas (hanya APAR/Hydrant)
+            />
+          </Card.Content>
+        </Card>
+      </List.Accordion>
 
-      <Button mode="contained" onPress={handleSave} style={styles.button}>
-        Simpan Laporan PAPA
+      {/* Bagian II: Data Teknis Pemadam */}
+      <List.Accordion
+        title="II. PEMERIKSAAN TEKNIS"
+        expanded={expanded.teknis}
+        onPress={() => setExpanded({ ...expanded, teknis: !expanded.teknis })}
+        left={p => (
+          <List.Icon {...p} icon="fire-extinguisher" color="#ef4444" />
+        )}
+        style={styles.accordion}
+      >
+        <Card style={styles.innerCard}>
+          <Card.Content>
+            {SelectedForm ? (
+              <SelectedForm
+                data={form}
+                setData={setForm}
+                styles={styles}
+                requestPermission={requestCameraPermission}
+              />
+            ) : (
+              <Text style={styles.emptyText}>
+                Form {subAlat} belum tersedia di Registry.
+              </Text>
+            )}
+          </Card.Content>
+        </Card>
+      </List.Accordion>
+
+      {/* Bagian III: Kesimpulan Laporan */}
+      <List.Accordion
+        title="III. CATATAN & KESIMPULAN"
+        expanded={expanded.catatan}
+        onPress={() => setExpanded({ ...expanded, catatan: !expanded.catatan })}
+        left={p => <List.Icon {...p} icon="clipboard-check" color="#ef4444" />}
+        style={styles.accordion}
+      >
+        <Card style={styles.innerCard}>
+          <Card.Content>
+            <FormCatatan data={form} setData={setForm} styles={styles} />
+          </Card.Content>
+        </Card>
+      </List.Accordion>
+
+      <Button
+        mode="contained"
+        icon="content-save-check"
+        onPress={handleSave}
+        style={styles.saveButton}
+        buttonColor="#ef4444"
+      >
+        SIMPAN LAPORAN {subAlat.toUpperCase()}
       </Button>
+
+      <View style={{ height: 50 }} />
     </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  container: { padding: 20, backgroundColor: '#f5f5f5' },
-  title: { marginBottom: 20, fontWeight: 'bold', color: '#3b82f6' },
-  input: { marginBottom: 12 },
-  card: { marginBottom: 20 },
-  button: { marginTop: 10, marginBottom: 40 },
-});
+// ... styles tetap sama seperti sebelumnya

@@ -5,17 +5,35 @@ import {
   ScrollView,
   SafeAreaView,
   Image,
-  Alert, // Tambahkan Alert
+  Alert,
+  StatusBar,
+  Dimensions,
+  TouchableOpacity,
 } from 'react-native';
-import { Text, Card, Avatar, IconButton, useTheme } from 'react-native-paper';
+import { Text, Card, Avatar, IconButton, Surface } from 'react-native-paper';
 import NetInfo from '@react-native-community/netinfo';
-import AsyncStorage from '@react-native-async-storage/async-storage'; // Tambahkan AsyncStorage
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
+import { AuthContext } from '../../../App';
+
+const { width } = Dimensions.get('window');
+
+// Palet Warna Standar K3 (Safety Colors)
+const SAFETY_COLORS = {
+  primary: '#0055A4', // Safety Blue (Mandatory/Informasi)
+  warning: '#F9D71C', // Safety Yellow (Waspada/Caution)
+  success: '#009639', // Safety Green (Aman/Safe Condition)
+  danger: '#C8102E', // Safety Red (Bahaya/Stop)
+  background: '#F2F4F7', // Abu-abu muda bersih
+  textDark: '#1E293B',
+  textLight: '#BBDEFB',
+};
 
 export default function DashboardScreen({ navigation }) {
-  const theme = useTheme();
+  const { signOut } = React.useContext(AuthContext);
   const [isConnected, setIsConnected] = useState(true);
+  const auth = React.useContext(AuthContext);
 
-  // Logika cek koneksi internet
   useEffect(() => {
     const unsubscribe = NetInfo.addEventListener(state => {
       setIsConnected(state.isConnected);
@@ -23,11 +41,10 @@ export default function DashboardScreen({ navigation }) {
     return () => unsubscribe();
   }, []);
 
-  // Fungsi Logout
   const handleLogout = () => {
     Alert.alert(
       'Konfirmasi Logout',
-      'Apakah Anda yakin ingin keluar dari aplikasi?',
+      'Apakah Anda yakin ingin keluar dari sesi ini?',
       [
         { text: 'Batal', style: 'cancel' },
         {
@@ -35,13 +52,18 @@ export default function DashboardScreen({ navigation }) {
           style: 'destructive',
           onPress: async () => {
             try {
-              // Hapus token login
-              await AsyncStorage.removeItem('userToken');
-              // Reset navigasi ke layar Login
-              navigation.reset({
-                index: 0,
-                routes: [{ name: 'Login' }],
-              });
+              if (auth && auth.signOut) {
+                await auth.signOut();
+              } else {
+                // Fallback jika context gagal (Silent Error Fix)
+                console.error('AuthContext tidak ditemukan');
+                await AsyncStorage.multiRemove(['userToken', 'userData']);
+                // Force reset jika context tidak tersedia
+                navigation.reset({
+                  index: 0,
+                  routes: [{ name: 'Login' }],
+                });
+              }
             } catch (error) {
               console.error('Error saat logout:', error);
             }
@@ -51,47 +73,66 @@ export default function DashboardScreen({ navigation }) {
     );
   };
 
+  const QUICK_STATS = [
+    {
+      label: 'Total Riksa',
+      value: '124',
+      icon: 'shield-check',
+      color: SAFETY_COLORS.primary,
+    },
+    { label: 'Pending', value: '8', icon: 'alert-decagram', color: '#E65100' }, // Orange Warning
+    {
+      label: 'Selesai',
+      value: '42',
+      icon: 'check-circle',
+      color: SAFETY_COLORS.success,
+    },
+  ];
+
   const MENU_DATA = [
     {
       id: 1,
       title: 'Input Data',
-      icon: 'clipboard-edit',
+      icon: 'clipboard-edit-outline',
       desc: 'Mulai Inspeksi Baru',
       screen: 'PilihBidang',
-    },
-    {
-      id: 5,
-      title: 'Jadwal Riksa Uji',
-      icon: 'calendar-clock',
-      desc: 'Daftar Antrean Inspeksi',
-      screen: 'JadwalRiksa',
+      color: SAFETY_COLORS.primary,
     },
     {
       id: 2,
-      title: 'Riwayat',
-      icon: 'history',
-      desc: 'Lihat data tersimpan',
-      screen: 'Riwayat',
+      title: 'Jadwal Kerja',
+      icon: 'calendar-clock',
+      desc: 'Antrean Riksa Uji',
+      screen: 'JadwalRiksa',
+      color: '#546E7A',
     },
     {
       id: 3,
-      title: 'Laporan',
-      icon: 'chart-bar',
-      desc: 'Grafik & Statistik',
-      screen: 'Laporan',
+      title: 'Riwayat',
+      icon: 'database-search',
+      desc: 'Cek data tersimpan',
+      screen: 'Riwayat',
+      color: '#455A64',
     },
     {
       id: 4,
-      title: 'Pengaturan',
-      icon: 'cog',
-      desc: 'Konfigurasi Aplikasi',
-      screen: 'Settings',
+      title: 'Laporan PDF',
+      icon: 'file-pdf-box',
+      desc: 'Grafik & Statistik',
+      screen: 'Laporan',
+      color: SAFETY_COLORS.danger,
     },
   ];
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={[styles.header, { backgroundColor: theme.colors.primary }]}>
+      <StatusBar
+        barStyle="light-content"
+        backgroundColor={SAFETY_COLORS.primary}
+      />
+
+      {/* Header Section */}
+      <View style={[styles.header, { backgroundColor: SAFETY_COLORS.primary }]}>
         <View style={styles.headerTop}>
           <View style={styles.logoAndTitleContainer}>
             <View style={styles.logoWrapper}>
@@ -100,81 +141,135 @@ export default function DashboardScreen({ navigation }) {
                 style={styles.logoImage}
               />
             </View>
-            <Text variant="titleLarge" style={styles.headerTitle}>
-              Riksa Jaya Swastika
-            </Text>
+            <View>
+              <Text style={styles.headerTitle}>RIKSA JAYA</Text>
+              <Text style={styles.headerSubtitle}>SWASTIKA K3 SYSTEM</Text>
+            </View>
           </View>
 
-          <View style={styles.connectionIndicator}>
-            <IconButton
-              icon={isConnected ? 'wifi' : 'wifi-off'}
-              iconColor={isConnected ? '#4ade80' : '#ef4444'}
-              size={20}
-              style={{ margin: 0 }}
+          <Surface style={styles.statusBadge} elevation={0}>
+            <View
+              style={[
+                styles.dot,
+                {
+                  backgroundColor: isConnected
+                    ? '#4ADE80'
+                    : SAFETY_COLORS.danger,
+                },
+              ]}
             />
             <Text
               style={[
-                styles.connectionText,
-                { color: isConnected ? '#4ade80' : '#ef4444' },
+                styles.statusText,
+                { color: isConnected ? '#4ADE80' : '#FFCDD2' },
               ]}
             >
-              {isConnected ? 'Online' : 'Offline'}
+              {isConnected ? 'Sistem Online' : 'Offline'}
             </Text>
-          </View>
+          </Surface>
         </View>
 
-        <View style={styles.welcomeSection}>
-          <Text variant="bodyLarge" style={styles.welcomeText}>
-            Selamat Datang,
-          </Text>
-          <Text variant="headlineMedium" style={styles.userName}>
-            Andi Inspector
-          </Text>
+        <View style={styles.profileSection}>
+          <View>
+            <Text style={styles.greetingText}>Inspector On Duty,</Text>
+            <Text style={styles.userNameText}>Andi Inspector</Text>
+          </View>
+          <Avatar.Image
+            size={60}
+            source={{ uri: 'https://i.pravatar.cc/300' }}
+            style={styles.avatar}
+          />
+        </View>
+
+        {/* Stats Section Overlay */}
+        <View style={styles.statsContainer}>
+          {QUICK_STATS.map((stat, index) => (
+            <Surface key={index} style={styles.statCard} elevation={2}>
+              <IconButton
+                icon={stat.icon}
+                iconColor={stat.color}
+                size={26}
+                style={styles.statIcon}
+              />
+              <Text style={[styles.statValue, { color: stat.color }]}>
+                {stat.value}
+              </Text>
+              <Text style={styles.statLabel}>{stat.label}</Text>
+            </Surface>
+          ))}
         </View>
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Menu Utama */}
-        {MENU_DATA.map(item => (
-          <Card
-            key={item.id}
-            style={styles.card}
-            onPress={() => item.screen && navigation.navigate(item.screen)}
-          >
-            <Card.Title
-              title={item.title}
-              subtitle={item.desc}
-              left={props => (
-                <Avatar.Icon
-                  {...props}
-                  icon={item.icon}
-                  style={{ backgroundColor: '#eff6ff' }}
-                  color={theme.colors.primary}
+      <ScrollView
+        style={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.menuGrid}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Modul Pemeriksaan</Text>
+            <IconButton icon="dots-vertical" size={20} />
+          </View>
+
+          {MENU_DATA.map(item => (
+            <Card
+              key={item.id}
+              style={styles.menuCard}
+              onPress={() => navigation.navigate(item.screen)}
+            >
+              <View style={styles.menuRow}>
+                <View
+                  style={[
+                    styles.menuIconWrapper,
+                    { backgroundColor: item.color + '10' },
+                  ]}
+                >
+                  <IconButton
+                    icon={item.icon}
+                    iconColor={item.color}
+                    size={28}
+                  />
+                </View>
+                <View style={styles.menuTextContent}>
+                  <Text style={styles.menuTitle}>{item.title}</Text>
+                  <Text style={styles.menuDesc}>{item.desc}</Text>
+                </View>
+                <MaterialCommunityIcons
+                  name="chevron-right"
+                  size={24}
+                  color="#B0BEC5"
                 />
-              )}
-              right={props => <IconButton {...props} icon="chevron-right" />}
-            />
-          </Card>
-        ))}
+              </View>
+            </Card>
+          ))}
+        </View>
 
-        {/* Tombol Logout di paling bawah */}
-        <Card style={[styles.card, styles.logoutCard]} onPress={handleLogout}>
-          <Card.Title
-            title="Keluar"
-            titleStyle={{ color: '#ef4444', fontWeight: 'bold' }}
-            subtitle="Logout dari akun Anda"
-            left={props => (
-              <Avatar.Icon
-                {...props}
-                icon="logout"
-                style={{ backgroundColor: '#fee2e2' }}
-                color="#ef4444"
-              />
-            )}
+        {/* Safety Banner */}
+        <Surface style={styles.safetyBanner} elevation={1}>
+          <IconButton
+            icon="bullhorn-variant"
+            iconColor={SAFETY_COLORS.primary}
+            size={22}
           />
-        </Card>
+          <Text style={styles.safetyText}>
+            Utamakan Keselamatan dan Kesehatan Kerja
+          </Text>
+        </Surface>
 
-        {/* Spacing bawah agar tidak mepet */}
+        {/* Footer */}
+        <View style={styles.footerSection}>
+          <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
+            <MaterialCommunityIcons
+              name="logout"
+              size={18}
+              color={SAFETY_COLORS.danger}
+            />
+            <Text style={styles.logoutText}>Keluar Sesi</Text>
+          </TouchableOpacity>
+          <Text style={styles.versionText}>
+            RJS Mobile v2.1.0 • Technical Support
+          </Text>
+        </View>
+
         <View style={{ height: 40 }} />
       </ScrollView>
     </SafeAreaView>
@@ -182,65 +277,167 @@ export default function DashboardScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f5f5' },
+  container: { flex: 1, backgroundColor: SAFETY_COLORS.background },
   header: {
-    paddingHorizontal: 10,
-    paddingBottom: 40,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 80,
+    borderBottomLeftRadius: 40,
+    borderBottomRightRadius: 40,
+    elevation: 10,
   },
   headerTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 40,
-    paddingHorizontal: 15,
+    marginTop: 20,
   },
-  logoAndTitleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
+  logoAndTitleContainer: { flexDirection: 'row', alignItems: 'center' },
   logoWrapper: {
-    width: 40,
-    height: 40,
+    width: 45,
+    height: 45,
     backgroundColor: 'white',
-    borderRadius: 10,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 10,
-    elevation: 3,
+    marginRight: 12,
   },
-  logoImage: {
-    width: 32,
-    height: 32,
-    resizeMode: 'contain',
-  },
+  logoImage: { width: 35, height: 35, resizeMode: 'contain' },
   headerTitle: {
     color: 'white',
-    fontWeight: 'bold',
-    fontSize: 16,
-    letterSpacing: 0.5,
+    fontWeight: '900',
+    fontSize: 20,
+    letterSpacing: 1,
   },
-  connectionIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.1)',
-    borderRadius: 20,
-    paddingRight: 10,
-  },
-  connectionText: {
+  headerSubtitle: {
+    color: SAFETY_COLORS.textLight,
     fontSize: 10,
     fontWeight: 'bold',
+    letterSpacing: 2,
   },
-  welcomeSection: { paddingHorizontal: 20, marginTop: 20 },
-  welcomeText: { color: '#bfdbfe' },
-  userName: { color: 'white', fontWeight: 'bold' },
-  content: { flex: 1, paddingHorizontal: 20, marginTop: -25 },
-  card: { marginBottom: 12, backgroundColor: 'white' },
-  logoutCard: {
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  dot: { width: 8, height: 8, borderRadius: 4, marginRight: 6 },
+  statusText: { fontSize: 11, fontWeight: 'bold' },
+  profileSection: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 30,
+  },
+  greetingText: { color: 'rgba(255, 255, 255, 0.8)', fontSize: 16 },
+  userNameText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 28,
+    textShadowColor: 'rgba(0, 0, 0, 0.25)',
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 3,
+  },
+  avatar: { backgroundColor: '#fff', elevation: 5 },
+  statsContainer: {
+    position: 'absolute',
+    bottom: -50,
+    left: 20,
+    right: 20,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  statCard: {
+    width: (width - 60) / 3.2,
+    backgroundColor: 'white',
+    borderRadius: 20,
+    paddingVertical: 15,
+    alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#fecaca', // Garis tipis merah muda
-    marginTop: 10,
+    borderColor: '#E2E8F0',
   },
+  statIcon: { margin: 0 },
+  statValue: { fontWeight: '900', fontSize: 20 },
+  statLabel: {
+    fontSize: 10,
+    color: '#64748B',
+    fontWeight: 'bold',
+    marginTop: 2,
+  },
+  scrollContent: { marginTop: 65, paddingHorizontal: 20 },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: SAFETY_COLORS.textDark,
+  },
+  menuGrid: { marginBottom: 20 },
+  menuCard: {
+    backgroundColor: 'white',
+    borderRadius: 22,
+    marginBottom: 14,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+  },
+  menuRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 15,
+  },
+  menuIconWrapper: {
+    width: 58,
+    height: 58,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  menuTextContent: { flex: 1, paddingLeft: 18 },
+  menuTitle: {
+    fontSize: 17,
+    fontWeight: 'bold',
+    color: SAFETY_COLORS.textDark,
+  },
+  menuDesc: { fontSize: 12, color: '#94A3B8', marginTop: 2 },
+  safetyBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'white',
+    padding: 8,
+    borderRadius: 15,
+    marginBottom: 25,
+    borderLeftWidth: 6,
+    borderLeftColor: SAFETY_COLORS.warning,
+  },
+  safetyText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#475569',
+    fontStyle: 'italic',
+    flex: 1,
+  },
+  footerSection: { alignItems: 'center', marginTop: 10 },
+  logoutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEE2E2',
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 25,
+  },
+  logoutText: {
+    color: SAFETY_COLORS.danger,
+    fontWeight: 'bold',
+    fontSize: 14,
+    marginLeft: 8,
+  },
+  versionText: { color: '#94A3B8', fontSize: 11, marginTop: 15 },
 });

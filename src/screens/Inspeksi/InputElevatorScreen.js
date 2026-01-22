@@ -1,82 +1,156 @@
 import React, { useState } from 'react';
 import { View, ScrollView, StyleSheet, Alert } from 'react-native';
-import { TextInput, Button, Text, Checkbox, Card } from 'react-native-paper';
+import { Button, Text, Card } from 'react-native-paper';
 import { db } from '../../services/db-service';
+import {
+  FormRegistry,
+  FormDataUmum,
+  FormCatatan,
+} from '../../components/forms';
 
 export default function InputElevatorScreen({ route, navigation }) {
-  const { subAlat } = route.params;
+  // subAlat dikirim dari menu (contoh: 'Lift Penumpang', 'Tangga Berjalan (Eskalator)')
+  const { subAlat } = route.params || { subAlat: 'Lift Penumpang' };
 
-  const [form, setForm] = useState({
-    namaPerusahaan: '',
-    jenisAlat: 'Forklift',
-    noSeri: '',
-    kondisiGarpu: false,
-    kondisiMast: false,
-    sistemRem: false,
-    ujiBeban: '',
+  // State utama untuk menampung seluruh data inspeksi
+  const [data, setData] = useState({
+    pemilik: '', // Field wajib di FormDataUmum
+    alamat: '',
+    lokasiUnit: '',
+    dokumentasi: [],
+    catatan: '',
+    tglPemeriksaan: new Date().toLocaleDateString('id-ID'),
   });
 
-  const handleSave = () => {
-    const payload = { bidang: 'ELEVATOR', ...form };
-    db.execute('INSERT INTO inspections (bidang, data) VALUES (?, ?)', [
-      'ELEVATOR',
-      JSON.stringify(payload),
-    ]);
-    Alert.alert('Sukses', 'Data ELEVATOR Tersimpan', [
-      { text: 'OK', onPress: () => navigation.navigate('MainApp') },
-    ]);
+  // Ambil komponen form yang sesuai dari registry
+  const DynamicForm = FormRegistry[subAlat];
+
+  const handleSave = async () => {
+    // Validasi disesuaikan dengan key 'pemilik' di FormDataUmum
+    if (!data.pemilik) {
+      Alert.alert(
+        'Peringatan',
+        'Mohon isi Nama Pemilik / Pengguna di Data Umum',
+      );
+      return;
+    }
+
+    const payload = {
+      bidang: 'LIFT',
+      subAlat: subAlat,
+      ...data,
+      createdAt: new Date().toISOString(),
+    };
+
+    try {
+      await db.execute(
+        'INSERT INTO inspections (bidang, data, created_at) VALUES (?, ?, ?)',
+        ['LIFT', JSON.stringify(payload), new Date().toISOString()],
+      );
+
+      Alert.alert('Sukses', `Laporan ${subAlat} Berhasil Disimpan`, [
+        { text: 'OK', onPress: () => navigation.navigate('MainApp') },
+      ]);
+    } catch (err) {
+      console.error('Save Error:', err);
+      Alert.alert('Error', 'Gagal menyimpan data ke database');
+    }
   };
 
   return (
     <ScrollView style={styles.container}>
-      <Text variant="headlineSmall" style={styles.title}>
-        Form Inspeksi: {subAlat}
+      <Text variant="headlineSmall" style={styles.headerTitle}>
+        Inspeksi {subAlat}
       </Text>
-      <TextInput
-        label="Nama Perusahaan"
-        value={form.namaPerusahaan}
-        onChangeText={t => setForm({ ...form, namaPerusahaan: t })}
-        mode="outlined"
-        style={styles.input}
-      />
-      <TextInput
-        label="Nomor Seri Alat"
-        value={form.noSeri}
-        onChangeText={t => setForm({ ...form, noSeri: t })}
-        mode="outlined"
-        style={styles.input}
-      />
 
+      {/* SEKSI 1: DATA UMUM (Disesuaikan dengan Bidang LIFT) */}
       <Card style={styles.card}>
-        <Card.Title title="Sistem Keamanan Lift" />
-        <Checkbox.Item
-          label="Interlock Pintu Berfungsi"
-          status={form.pintu ? 'checked' : 'unchecked'}
-          onPress={() => setForm({ ...form, pintu: !form.pintu })}
-        />
-        <Checkbox.Item
-          label="Governor / Safety Gear OK"
-          status={form.gov ? 'checked' : 'unchecked'}
-          onPress={() => setForm({ ...form, gov: !form.gov })}
-        />
-        <Checkbox.Item
-          label="Tombol Alarm & Intercom OK"
-          status={form.intercom ? 'checked' : 'unchecked'}
-          onPress={() => setForm({ ...form, intercom: !form.intercom })}
-        />
+        <Card.Content>
+          <FormDataUmum
+            data={data}
+            setData={setData}
+            styles={styles}
+            subAlat={subAlat}
+            bidang="LIFT" // Memberitahu komponen untuk menampilkan field spesifik LIFT
+          />
+        </Card.Content>
       </Card>
 
-      <Button mode="contained" onPress={handleSave} style={styles.button}>
-        Simpan Laporan PAPA
+      {/* SEKSI 2: FORM DINAMIS (Rincian Teknis Lift/Eskalator) */}
+      <Card style={styles.card}>
+        <Card.Content>
+          {DynamicForm ? (
+            <DynamicForm
+              data={data}
+              setData={setData}
+              styles={styles}
+              requestPermission={() => {}}
+            />
+          ) : (
+            <Text
+              style={{ color: 'red', textAlign: 'center', marginVertical: 10 }}
+            >
+              Form {subAlat} tidak ditemukan di Registry.
+            </Text>
+          )}
+        </Card.Content>
+      </Card>
+
+      {/* SEKSI 3: CATATAN & REKOMENDASI */}
+      <Card style={styles.card}>
+        <Card.Content>
+          <FormCatatan data={data} setData={setData} styles={styles} />
+        </Card.Content>
+      </Card>
+
+      {/* TOMBOL AKSI */}
+      <Button
+        mode="contained"
+        onPress={handleSave}
+        style={styles.saveButton}
+        icon="content-save-check"
+      >
+        Simpan Laporan {subAlat}
       </Button>
+
+      <View style={{ height: 40 }} />
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 20, backgroundColor: '#f5f5f5' },
-  title: { marginBottom: 20, fontWeight: 'bold', color: '#3b82f6' },
-  input: { marginBottom: 12 },
-  card: { marginBottom: 20 },
-  button: { marginTop: 10, marginBottom: 40 },
+  container: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+    padding: 15,
+  },
+  headerTitle: {
+    marginBottom: 20,
+    fontWeight: 'bold',
+    color: '#8b5cf6',
+    textAlign: 'center',
+    textTransform: 'uppercase',
+  },
+  card: {
+    marginBottom: 15,
+    borderRadius: 12,
+    elevation: 3,
+    backgroundColor: 'white',
+  },
+  input: {
+    marginBottom: 12,
+    backgroundColor: 'white',
+  },
+  subTitleSection: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginVertical: 10,
+    color: '#6d28d9',
+  },
+  saveButton: {
+    marginTop: 10,
+    paddingVertical: 8,
+    backgroundColor: '#8b5cf6',
+    borderRadius: 8,
+  },
 });

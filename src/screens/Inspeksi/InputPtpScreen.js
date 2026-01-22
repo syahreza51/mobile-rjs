@@ -1,250 +1,154 @@
 import React, { useState } from 'react';
 import { View, ScrollView, StyleSheet, Alert } from 'react-native';
-import {
-  TextInput,
-  Button,
-  Text,
-  Checkbox,
-  Card,
-  Divider,
-} from 'react-native-paper';
+import { Button, Text, Card } from 'react-native-paper';
 import { db } from '../../services/db-service';
+import {
+  FormRegistry,
+  FormDataUmum,
+  FormCatatan,
+} from '../../components/forms';
 
 export default function InputPtpScreen({ route, navigation }) {
+  // Mengambil subAlat dari navigasi (contoh: 'Genset' atau 'Mesin Press')
   const { subAlat } = route.params || { subAlat: 'Motor Diesel' };
 
-  const [form, setForm] = useState({
-    // DATA UMUM
-    pemilik: 'PT. SUN STAR PRIMA MOTOR',
-    alamat: 'Jl. Raya Tajur No. 62, Pakuan, Kec. Bogor Selatan, Kota Bogor',
-    lokasiUnit: 'Ruang Genset',
-    merkModel: 'Cummins / 6BT5.9-G2',
-    noSeri: '78727510',
-    kapasitas: '100 kVA',
-
-    // DATA TEKNIS - ENGINE
-    engineMerk: 'Cummins / 6BT5.9-G2',
-    engineTahun: '2018',
-    engineDaya: '100 kVA',
-    engineSilinder: '6',
-
-    // DATA TEKNIS - GENERATOR
-    genMerk: 'Stamford / UC.I274C14',
-    genNoSeri: 'X18I383516',
-    genTegangan: '380 V',
-    genFrekuensi: '50 Hz',
-    genPutaran: '1500 rpm',
-
-    // CHECKLIST RIKSA UJI (Kondisi Baik/Buruk)
-    kondisiPondasi: true,
-    kondisiTangkiHarian: true,
-    kondisiOli: true,
-    kondisiAccu: true,
-    kondisiRadiator: true,
-    kondisiKipas: true,
-    kondisiMuffler: true,
-
-    // HASIL PENGUKURAN
-    grounding: '19', // Nilai Ohm
-    kebisingan: '85', // Nilai dB
-    pencahayaan: '78', // Nilai Lux
+  // Inisialisasi State Data agar sinkron dengan FormDataUmum
+  const [data, setData] = useState({
+    pemilik: '', // Field wajib untuk validasi
+    alamat: '',
+    lokasiUnit: '',
+    dokumentasi: [],
+    catatan: '',
+    tglPemeriksaan: new Date().toLocaleDateString('id-ID'),
   });
 
-  const handleSave = () => {
-    // Gabungkan semua data ke dalam satu objek payload
+  // Ambil Komponen Form dari Registry berdasarkan nama subAlat
+  const DynamicForm = FormRegistry[subAlat];
+
+  const handleSave = async () => {
+    // Validasi menggunakan field 'pemilik' sesuai update FormDataUmum
+    if (!data.pemilik) {
+      Alert.alert(
+        'Peringatan',
+        'Mohon isi Nama Pemilik / Pengguna di Data Umum',
+      );
+      return;
+    }
+
     const payload = {
       bidang: 'PTP',
       subAlat: subAlat,
-      ...form,
-      tglInspeksi: new Date().toLocaleDateString('id-ID'),
-      timestamp: new Date().getTime(),
+      ...data,
+      createdAt: new Date().toISOString(),
     };
 
     try {
-      // Pastikan query ini sesuai dengan struktur tabel Anda
-      // Jika tabel Anda hanya punya kolom (id, created_at, data), gunakan query bawah ini:
-      db.execute('INSERT INTO inspections (data) VALUES (?)', [
-        JSON.stringify(payload),
-      ]);
+      await db.execute(
+        'INSERT INTO inspections (bidang, data, created_at) VALUES (?, ?, ?)',
+        ['PTP', JSON.stringify(payload), new Date().toISOString()],
+      );
 
-      Alert.alert('Sukses', `Laporan ${subAlat} Berhasil Disimpan`, [
-        { text: 'OK', onPress: () => navigation.navigate('MainApp') },
+      Alert.alert('Sukses', `Laporan ${subAlat} berhasil disimpan`, [
+        { text: 'OK', onPress: () => navigation.goBack() }, // Menggunakan goBack agar kembali ke menu sebelumnya
       ]);
     } catch (err) {
-      console.error('Detail Error Simpan:', err);
-      Alert.alert('Error', 'Gagal menyimpan: ' + err.message);
+      console.error('PTP Save Error:', err);
+      Alert.alert('Error', 'Gagal menyimpan data ke database');
     }
   };
 
   return (
-    <ScrollView style={styles.container}>
-      <Text variant="headlineSmall" style={styles.title}>
-        Form Riksa Uji {subAlat}
+    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+      <Text variant="headlineSmall" style={styles.headerTitle}>
+        Inspeksi {subAlat}
       </Text>
 
-      {/* SEKSI 1: DATA UMUM */}
+      {/* 1. DATA UMUM (Disesuaikan untuk PTP) */}
       <Card style={styles.card}>
-        <Card.Title title="I. DATA UMUM" />
         <Card.Content>
-          <TextInput
-            label="Pemilik / Pengguna"
-            value={form.pemilik}
-            onChangeText={t => setForm({ ...form, pemilik: t })}
-            mode="outlined"
-            style={styles.input}
-          />
-          <TextInput
-            label="Lokasi Unit"
-            value={form.lokasiUnit}
-            onChangeText={t => setForm({ ...form, lokasiUnit: t })}
-            mode="outlined"
-            style={styles.input}
-          />
-          <TextInput
-            label="Nomor Seri"
-            value={form.noSeri}
-            onChangeText={t => setForm({ ...form, noSeri: t })}
-            mode="outlined"
-            style={styles.input}
-          />
-          <TextInput
-            label="Kapasitas (kVA)"
-            value={form.kapasitas}
-            keyboardType="numeric"
-            onChangeText={t => setForm({ ...form, kapasitas: t })}
-            mode="outlined"
-            style={styles.input}
+          <FormDataUmum
+            data={data}
+            setData={setData}
+            styles={styles}
+            subAlat={subAlat}
+            bidang="PTP" // Memunculkan field Merk, No Seri, Kapasitas, dan No Izin
           />
         </Card.Content>
       </Card>
 
-      {/* SEKSI 2: DATA TEKNIS ENGINE */}
+      {/* 2. FORM DINAMIS (Berdasarkan subAlat yang dipilih) */}
       <Card style={styles.card}>
-        <Card.Title title="II. DATA TEKNIS ENGINE" />
         <Card.Content>
-          <TextInput
-            label="Merk / Model Engine"
-            value={form.engineMerk}
-            onChangeText={t => setForm({ ...form, engineMerk: t })}
-            mode="outlined"
-            style={styles.input}
-          />
-          <TextInput
-            label="Jumlah Silinder"
-            value={form.engineSilinder}
-            keyboardType="numeric"
-            onChangeText={t => setForm({ ...form, engineSilinder: t })}
-            mode="outlined"
-            style={styles.input}
-          />
-          <TextInput
-            label="Daya Engine"
-            value={form.engineDaya}
-            onChangeText={t => setForm({ ...form, engineDaya: t })}
-            mode="outlined"
-            style={styles.input}
-          />
+          {DynamicForm ? (
+            <DynamicForm
+              data={data}
+              setData={setData}
+              styles={styles}
+              requestPermission={() => {}} // Anda bisa menghubungkan ke requestCameraPermission jika perlu
+            />
+          ) : (
+            <Text style={{ color: 'red', textAlign: 'center', padding: 20 }}>
+              Form untuk {subAlat} belum tersedia di Registry.
+            </Text>
+          )}
         </Card.Content>
       </Card>
 
-      {/* SEKSI 3: CHECKLIST KOMPONEN */}
+      {/* 3. CATATAN & REKOMENDASI */}
       <Card style={styles.card}>
-        <Card.Title title="III. CHECKLIST KOMPONEN" />
         <Card.Content>
-          <Checkbox.Item
-            label="Pondasi Dasar (Baik)"
-            status={form.kondisiPondasi ? 'checked' : 'unchecked'}
-            onPress={() =>
-              setForm({ ...form, kondisiPondasi: !form.kondisiPondasi })
-            }
-          />
-          <Checkbox.Item
-            label="Sistem Pelumasan / Oli (Baik)"
-            status={form.kondisiOli ? 'checked' : 'unchecked'}
-            onPress={() => setForm({ ...form, kondisiOli: !form.kondisiOli })}
-          />
-          <Checkbox.Item
-            label="Sistem Pendingin / Radiator (Baik)"
-            status={form.kondisiRadiator ? 'checked' : 'unchecked'}
-            onPress={() =>
-              setForm({ ...form, kondisiRadiator: !form.kondisiRadiator })
-            }
-          />
-          <Checkbox.Item
-            label="Sistem Bahan Bakar (Baik)"
-            status={form.kondisiTangkiHarian ? 'checked' : 'unchecked'}
-            onPress={() =>
-              setForm({
-                ...form,
-                kondisiTangkiHarian: !form.kondisiTangkiHarian,
-              })
-            }
-          />
-          <Checkbox.Item
-            label="Kutub Baterai / Accu (Baik)"
-            status={form.kondisiAccu ? 'checked' : 'unchecked'}
-            onPress={() => setForm({ ...form, kondisiAccu: !form.kondisiAccu })}
-          />
+          <FormCatatan data={data} setData={setData} styles={styles} />
         </Card.Content>
       </Card>
 
-      {/* SEKSI 4: HASIL PENGUKURAN */}
-      <Card style={styles.card}>
-        <Card.Title title="IV. HASIL PENGUKURAN" />
-        <Card.Content>
-          <TextInput
-            label="Resistansi Pembumian (Ohm)"
-            value={form.grounding}
-            placeholder="Max 5 Ohm"
-            keyboardType="numeric"
-            onChangeText={t => setForm({ ...form, grounding: t })}
-            mode="outlined"
-            style={styles.input}
-            right={<TextInput.Affix text="Ω" />}
-          />
-          <TextInput
-            label="Tingkat Kebisingan (dB)"
-            value={form.kebisingan}
-            keyboardType="numeric"
-            onChangeText={t => setForm({ ...form, kebisingan: t })}
-            mode="outlined"
-            style={styles.input}
-            right={<TextInput.Affix text="dB" />}
-          />
-          <TextInput
-            label="Intensitas Cahaya (Lux)"
-            value={form.pencahayaan}
-            keyboardType="numeric"
-            onChangeText={t => setForm({ ...form, pencahayaan: t })}
-            mode="outlined"
-            style={styles.input}
-            right={<TextInput.Affix text="Lux" />}
-          />
-        </Card.Content>
-      </Card>
-
-      <Button mode="contained" onPress={handleSave} style={styles.button}>
-        Simpan Laporan Motor Diesel
+      {/* TOMBOL SIMPAN */}
+      <Button
+        mode="contained"
+        onPress={handleSave}
+        style={styles.saveButton}
+        icon="content-save-check"
+      >
+        Simpan Laporan {subAlat}
       </Button>
+
       <View style={{ height: 40 }} />
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 15, backgroundColor: '#f1f5f9' },
-  title: {
+  container: {
+    flex: 1,
+    backgroundColor: '#f8fafc',
+    padding: 15,
+  },
+  headerTitle: {
     marginBottom: 20,
     fontWeight: 'bold',
-    color: '#7c3aed',
+    color: '#0ea5e9', // Warna Biru khas PTP (Sky Blue)
     textAlign: 'center',
+    textTransform: 'uppercase',
   },
-  card: { marginBottom: 15, borderRadius: 12 },
-  input: { marginBottom: 10, backgroundColor: 'white' },
-  button: {
+  card: {
+    marginBottom: 15,
+    borderRadius: 12,
+    elevation: 3,
+    backgroundColor: 'white',
+  },
+  input: {
+    marginBottom: 12,
+    backgroundColor: 'white',
+  },
+  subTitleSection: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    marginVertical: 10,
+    color: '#0ea5e9',
+  },
+  saveButton: {
     marginTop: 10,
-    paddingVertical: 5,
+    paddingVertical: 8,
+    backgroundColor: '#0ea5e9',
     borderRadius: 8,
-    backgroundColor: '#7c3aed',
   },
 });

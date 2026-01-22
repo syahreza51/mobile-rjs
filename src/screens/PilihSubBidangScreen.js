@@ -4,11 +4,18 @@ import {
   StyleSheet,
   FlatList,
   SafeAreaView,
-  TouchableOpacity,
+  StatusBar,
 } from 'react-native';
-import { Text, IconButton, List, useTheme, Surface } from 'react-native-paper';
+import { Text, IconButton, List, Surface } from 'react-native-paper';
+import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 
-// Data Sub-Bidang (Contoh)
+// Palet Warna Standar K3 agar konsisten
+const SAFETY_COLORS = {
+  primary: '#0055A4', // Safety Blue
+  background: '#F2F4F7',
+  textDark: '#1E293B',
+};
+
 const SUB_DATA = {
   PAPA: [
     { id: 'FKL', title: 'Forklift', route: 'InputPapa', icon: 'forklift' },
@@ -32,6 +39,18 @@ const SUB_DATA = {
       title: 'Belt Conveyor',
       route: 'InputPapa',
       icon: 'ray-start-arrow',
+    },
+    {
+      id: 'MNL',
+      title: 'Manlift / Scissor Lift',
+      route: 'InputPapa',
+      icon: 'hoop-house',
+    },
+    {
+      id: 'GDL',
+      title: 'Gondola',
+      route: 'InputPapa',
+      icon: 'window-maximize',
     },
   ],
   PUBT: [
@@ -111,6 +130,12 @@ const SUB_DATA = {
       route: 'InputFire',
       icon: 'bell-ring',
     },
+    {
+      id: 'EVS',
+      title: 'Evakuasi & Suppression',
+      route: 'InputFire',
+      icon: 'run-fast',
+    },
   ],
   PTP: [
     {
@@ -133,6 +158,7 @@ const SUB_DATA = {
       route: 'InputPtp',
       icon: 'generator-portable',
     },
+    { id: 'TNR', title: 'Tanur/Furnace', route: 'InputPtp', icon: 'fire' },
   ],
   LIFT: [
     {
@@ -153,49 +179,81 @@ const SUB_DATA = {
       route: 'InputElevator',
       icon: 'stairs',
     },
+    {
+      id: 'TVL',
+      title: 'Ban Berjalan (Travelator)',
+      route: 'InputElevator',
+      icon: 'walk',
+    },
+    {
+      id: 'DMB',
+      title: 'Lift Pelayan (Dumbwaiter)',
+      route: 'InputElevator',
+      icon: 'room-service',
+    },
   ],
 };
 
 export default function PilihSubBidangScreen({ route, navigation }) {
   const { bidangId, bidangTitle } = route.params;
-  const theme = useTheme();
   const subItems = SUB_DATA[bidangId] || [];
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={[styles.header, { backgroundColor: theme.colors.primary }]}>
+      <StatusBar
+        barStyle="light-content"
+        backgroundColor={SAFETY_COLORS.primary}
+      />
+
+      {/* Header Section */}
+      <View style={[styles.header, { backgroundColor: SAFETY_COLORS.primary }]}>
         <IconButton
           icon="arrow-left"
           iconColor="white"
+          size={26}
           onPress={() => navigation.goBack()}
         />
-        <View>
+        <View style={styles.headerTextWrapper}>
           <Text variant="titleLarge" style={styles.headerTitle}>
             {bidangTitle}
           </Text>
-          <Text style={styles.headerSub}>Pilih Jenis Alat/Objek</Text>
+          <Text style={styles.headerSub}>Pilih Spesifikasi Alat / Objek</Text>
         </View>
       </View>
 
       <FlatList
         data={subItems}
         keyExtractor={item => item.id}
-        contentContainerStyle={{ padding: 15 }}
+        contentContainerStyle={styles.listContent}
+        showsVerticalScrollIndicator={false}
         renderItem={({ item }) => (
           <Surface style={styles.listItem} elevation={1}>
             <List.Item
               title={item.title}
-              titleStyle={{ fontWeight: 'bold' }}
+              titleStyle={styles.itemTitle}
+              description={`Kode Alat: ${item.id}`}
+              descriptionStyle={styles.itemDesc}
               left={props => (
-                <List.Icon
-                  {...props}
-                  icon="tools"
-                  color={theme.colors.primary}
+                <View style={styles.iconWrapper}>
+                  <MaterialCommunityIcons
+                    name={item.icon}
+                    size={28}
+                    color={SAFETY_COLORS.primary}
+                  />
+                </View>
+              )}
+              right={props => (
+                <IconButton
+                  icon="chevron-right"
+                  iconColor="#CBD5E1"
+                  style={{ alignSelf: 'center' }}
                 />
               )}
-              right={props => <List.Icon {...props} icon="chevron-right" />}
               onPress={() =>
-                navigation.navigate(item.route, { subAlat: item.title })
+                navigation.navigate(item.route, {
+                  subAlat: item.title,
+                  code: item.id,
+                })
               }
             />
           </Surface>
@@ -206,19 +264,48 @@ export default function PilihSubBidangScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f8fafc' },
+  container: { flex: 1, backgroundColor: SAFETY_COLORS.background },
   header: {
     paddingTop: 40,
-    paddingBottom: 20,
+    paddingBottom: 25,
     flexDirection: 'row',
     alignItems: 'center',
+    paddingHorizontal: 10,
+    borderBottomLeftRadius: 25,
+    borderBottomRightRadius: 25,
+    elevation: 5,
   },
-  headerTitle: { color: 'white', fontWeight: 'bold' },
-  headerSub: { color: '#e2e8f0', fontSize: 12 },
+  headerTextWrapper: { marginLeft: 5 },
+  headerTitle: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 22,
+    letterSpacing: 0.5,
+  },
+  headerSub: { color: 'rgba(255,255,255,0.7)', fontSize: 13 },
+  listContent: { padding: 16, paddingBottom: 30 },
   listItem: {
-    marginBottom: 10,
-    borderRadius: 10,
+    marginBottom: 12,
+    borderRadius: 16,
     backgroundColor: 'white',
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  itemTitle: {
+    fontWeight: '700',
+    color: SAFETY_COLORS.textDark,
+    fontSize: 16,
+  },
+  itemDesc: { fontSize: 11, color: '#94A3B8' },
+  iconWrapper: {
+    width: 50,
+    height: 50,
+    backgroundColor: '#F0F7FF',
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 10,
+    alignSelf: 'center',
   },
 });

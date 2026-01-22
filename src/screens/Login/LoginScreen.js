@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -10,44 +10,74 @@ import {
   useWindowDimensions,
   StyleSheet,
   Image,
+  Alert,
+  StatusBar,
 } from 'react-native';
 import CustomInput from '../../components/CustomInput';
-import { db } from '../../services/db-service'; // Import koneksi db
-import { Alert } from 'react-native';
+import { db } from '../../services/db-service';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AuthContext } from '../../../App';
+
+const SAFETY_COLORS = {
+  primary: '#0055A4',
+  textDark: '#1E293B',
+  textLight: '#64748B',
+  background: '#F8FAFC',
+};
 
 export default function LoginScreen({ navigation }) {
+  const { signIn } = React.useContext(AuthContext);
   const { width } = useWindowDimensions();
   const isTablet = width > 600;
-  const [email, setEmail] = React.useState('');
-  const [password, setPassword] = React.useState('');
+
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
-    const result = db.execute(
-      'SELECT * FROM users WHERE email = ? AND password = ?',
-      [email, password], // Pastikan Anda punya state email & password
-    );
+    if (!email || !password) {
+      Alert.alert('Peringatan', 'Email dan Password harus diisi.');
+      return;
+    }
 
-    if (result.rows.length > 0) {
-      const user = result.rows.item(0);
+    setLoading(true);
+    try {
+      const result = db.execute(
+        'SELECT * FROM users WHERE email = ? AND password = ?',
+        [email, password],
+      );
 
-      // SIMPAN DATA LOGIN KE STORAGE
-      await AsyncStorage.setItem('userToken', 'active');
-      await AsyncStorage.setItem('userData', JSON.stringify(user));
+      if (result.rows.length > 0) {
+        const user = result.rows.item(0);
+        await AsyncStorage.setItem('userToken', 'active');
+        await AsyncStorage.setItem('userData', JSON.stringify(user));
 
-      navigation.replace('MainApp');
-    } else {
-      Alert.alert('Gagal', 'Email atau Password salah.');
+        // Panggil fungsi signIn dari App.tsx
+        signIn('active');
+      } else {
+        Alert.alert('Gagal', 'Email atau Password salah.');
+      }
+    } catch (e) {
+      Alert.alert('Error', 'DB Error');
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <StatusBar
+        barStyle="dark-content"
+        backgroundColor={SAFETY_COLORS.background}
+      />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.flex1}
       >
-        <ScrollView contentContainerStyle={styles.scrollContent}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+        >
           <View style={[styles.card, { maxWidth: isTablet ? 500 : '100%' }]}>
             {/* Logo Area */}
             <View style={styles.header}>
@@ -69,39 +99,46 @@ export default function LoginScreen({ navigation }) {
               <Text
                 style={[styles.subtitle, isTablet && styles.subtitleTablet]}
               >
-                Sistem Inspeksi Digital (Inspector)
+                Inspector Digital System
               </Text>
             </View>
 
             {/* Form Area */}
             <View style={styles.form}>
               <CustomInput
-                label="Email Address"
-                placeholder="masukkan email anda"
+                label="Email Inspector"
+                placeholder="nama@email.com"
                 keyboardType="email-address"
                 value={email}
                 onChangeText={setEmail}
+                autoCapitalize="none"
+                returnKeyType="next"
               />
+
               <CustomInput
                 label="Password"
                 placeholder="••••••••"
                 secureTextEntry
                 value={password}
                 onChangeText={setPassword}
+                returnKeyType="done"
+                // Fungsi Enter: tekan enter di keyboard langsung login
+                onSubmitEditing={handleLogin}
               />
             </View>
 
             <TouchableOpacity style={styles.forgotBtn}>
-              <Text
-                style={[styles.forgotText, isTablet && styles.footerTextTablet]}
-              >
-                Forgot Password?
-              </Text>
+              <Text style={styles.forgotText}>Lupa Password?</Text>
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.loginBtn, isTablet && styles.loginBtnTablet]}
+              style={[
+                styles.loginBtn,
+                isTablet && styles.loginBtnTablet,
+                { opacity: loading ? 0.7 : 1 },
+              ]}
               onPress={handleLogin}
+              disabled={loading}
               activeOpacity={0.8}
             >
               <Text
@@ -110,27 +147,16 @@ export default function LoginScreen({ navigation }) {
                   isTablet && styles.loginBtnTextTablet,
                 ]}
               >
-                Sign In
+                {loading ? 'Authenticating...' : 'Sign In'}
               </Text>
             </TouchableOpacity>
 
-            {/* Footer */}
+            {/* Copyright / Footer Info */}
             <View style={styles.footer}>
-              <Text
-                style={[styles.footerText, isTablet && styles.footerTextTablet]}
-              >
-                Don't have an account?{' '}
+              <Text style={styles.footerText}>
+                © 2025 PT. Riksa Jaya Swastika
               </Text>
-              <TouchableOpacity>
-                <Text
-                  style={[
-                    styles.registerText,
-                    isTablet && styles.footerTextTablet,
-                  ]}
-                >
-                  Register
-                </Text>
-              </TouchableOpacity>
+              <Text style={styles.versionText}>v2.1.0 Build Production</Text>
             </View>
           </View>
         </ScrollView>
@@ -142,61 +168,63 @@ export default function LoginScreen({ navigation }) {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: '#f8fafc', // slate-50
+    backgroundColor: SAFETY_COLORS.background,
   },
   flex1: {
     flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
-    paddingHorizontal: 24,
+    paddingHorizontal: 30,
     justifyContent: 'center',
   },
   card: {
-    flex: 1,
-    justifyContent: 'center',
-    alignSelf: 'center',
     width: '100%',
+    alignSelf: 'center',
+    paddingVertical: 20,
   },
   header: {
     alignItems: 'center',
-    marginBottom: 48,
+    marginBottom: 40,
   },
   logoWrapper: {
-    width: 100,
-    height: 100,
-    borderRadius: 20,
+    width: 120,
+    height: 120,
+    backgroundColor: 'white',
+    borderRadius: 30,
     justifyContent: 'center',
     alignItems: 'center',
-    // elevation: 5, // Shadow untuk Android
-    // shadowColor: '#000', // Shadow untuk iOS
-    // shadowOffset: { width: 0, height: 2 },
-    // shadowOpacity: 0.1,
-    // shadowRadius: 10,
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
   },
   logoWrapperTablet: {
-    width: 140,
-    height: 140,
+    width: 160,
+    height: 160,
   },
   logoImage: {
-    width: 100,
-    height: 100,
+    width: '80%',
+    height: '80%',
     resizeMode: 'contain',
   },
   title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginTop: 20,
-    color: '#1e293b', // Slate 800
+    fontSize: 26,
+    fontWeight: '900',
+    marginTop: 25,
+    color: SAFETY_COLORS.textDark,
     textAlign: 'center',
+    letterSpacing: 0.5,
   },
   titleTablet: {
-    fontSize: 36,
+    fontSize: 38,
   },
   subtitle: {
-    color: '#64748b',
-    fontSize: 16,
-    marginTop: 8,
+    color: SAFETY_COLORS.textLight,
+    fontSize: 15,
+    marginTop: 5,
+    fontWeight: '500',
   },
   subtitleTablet: {
     fontSize: 20,
@@ -206,19 +234,24 @@ const styles = StyleSheet.create({
   },
   forgotBtn: {
     alignItems: 'flex-end',
-    paddingVertical: 8,
+    marginTop: 10,
   },
   forgotText: {
-    color: '#2563eb',
-    fontWeight: '600',
+    color: SAFETY_COLORS.primary,
+    fontWeight: '700',
+    fontSize: 13,
   },
   loginBtn: {
-    backgroundColor: '#2563eb',
-    marginTop: 32,
-    paddingVertical: 16,
-    borderRadius: 16,
+    backgroundColor: SAFETY_COLORS.primary,
+    marginTop: 35,
+    paddingVertical: 18,
+    borderRadius: 20,
     alignItems: 'center',
-    elevation: 4,
+    elevation: 6,
+    shadowColor: SAFETY_COLORS.primary,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
   },
   loginBtnTablet: {
     paddingVertical: 24,
@@ -227,24 +260,24 @@ const styles = StyleSheet.create({
     color: '#ffffff',
     fontSize: 18,
     fontWeight: 'bold',
+    letterSpacing: 1,
   },
   loginBtnTextTablet: {
     fontSize: 24,
   },
   footer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: 48,
-    marginBottom: 32,
+    alignItems: 'center',
+    marginTop: 60,
+    marginBottom: 20,
   },
   footerText: {
-    color: '#64748b',
+    color: SAFETY_COLORS.textLight,
+    fontSize: 12,
+    fontWeight: '600',
   },
-  footerTextTablet: {
-    fontSize: 18,
-  },
-  registerText: {
-    color: '#2563eb',
-    fontWeight: 'bold',
+  versionText: {
+    color: '#CBD5E1',
+    fontSize: 10,
+    marginTop: 4,
   },
 });

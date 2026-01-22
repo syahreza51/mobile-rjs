@@ -1,7 +1,7 @@
 import React from 'react';
 import { View } from 'react-native';
 import { TextInput, Checkbox, Text, Divider, List } from 'react-native-paper';
-import { PhotoSection } from './PhotoSection';
+import { PhotoManager } from '../shared/PhotoManager';
 
 export const FormForklift = ({ data, setData, styles, requestPermission }) => {
   // Fungsi helper untuk checklist (MS = Memenuhi Syarat, TMS = Tidak Memenuhi Syarat)
@@ -148,32 +148,13 @@ export const FormForklift = ({ data, setData, styles, requestPermission }) => {
         title="7. Dokumentasi Foto"
         left={p => <List.Icon {...p} icon="camera-burst" />}
       >
-        <View style={{ padding: 10 }}>
-          <PhotoSection
-            label="Foto Tampak Depan Alat"
-            imageUri={data.fotoDepan}
-            onPhotoTaken={uri => setData({ ...data, fotoDepan: uri })}
-            requestPermission={requestPermission}
-          />
-          <PhotoSection
-            label="Foto Samping / Nameplate"
-            imageUri={data.fotoNamePlate}
-            onPhotoTaken={uri => setData({ ...data, fotoNamePlate: uri })}
-            requestPermission={requestPermission}
-          />
-          <PhotoSection
-            label="Foto Garpu / Fork Detail"
-            imageUri={data.fotoGarpu}
-            onPhotoTaken={uri => setData({ ...data, fotoGarpu: uri })}
-            requestPermission={requestPermission}
-          />
-          <PhotoSection
-            label="Foto Ruang Mesin"
-            imageUri={data.fotoMesin}
-            onPhotoTaken={uri => setData({ ...data, fotoMesin: uri })}
-            requestPermission={requestPermission}
-          />
-        </View>
+        <PhotoManager
+          photos={data.dokumentasi || []}
+          onPhotosChange={newPhotos =>
+            setData({ ...data, dokumentasi: newPhotos })
+          }
+          requestPermission={requestPermission}
+        />
       </List.Accordion>
     </View>
   );

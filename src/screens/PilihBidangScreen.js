@@ -6,13 +6,22 @@ import {
   SafeAreaView,
   TouchableOpacity,
   Dimensions,
+  StatusBar,
 } from 'react-native';
-import { Text, IconButton, useTheme, Surface } from 'react-native-paper';
+import { Text, useTheme, Surface, IconButton } from 'react-native-paper';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 
 const { width } = Dimensions.get('window');
-// Padding horizontal grid adalah 12 * 2 = 24. Margin antar kartu 8 * 2 = 16 per kolom.
 const cardWidth = (width - 48) / 2;
+
+// Palet Warna Standar K3 agar konsisten dengan Dashboard
+const SAFETY_COLORS = {
+  primary: '#0055A4', // Safety Blue
+  warning: '#F9D71C', // Safety Yellow
+  success: '#009639', // Safety Green
+  danger: '#C8102E', // Safety Red
+  background: '#F2F4F7',
+};
 
 const DATA_BIDANG = [
   {
@@ -20,48 +29,48 @@ const DATA_BIDANG = [
     title: 'PAPA',
     sub: 'Angkat & Angkut',
     icon: 'crane',
-    color: '#2563eb',
-    route: 'PilihSubBidang', // Diarahkan ke Sub-Bidang terlebih dahulu
+    color: '#0055A4', // Safety Blue
+    description: 'Forklift, Crane, Excavator',
   },
   {
     id: '2',
     title: 'PUBT',
     sub: 'Uap & Bejana Tekan',
-    icon: 'hydro-power',
-    color: '#dc2626',
-    route: 'PilihSubBidang',
+    icon: 'gas-cylinder',
+    color: '#C8102E', // Safety Red
+    description: 'Boiler, Kompresor, Tangki',
   },
   {
     id: '3',
     title: 'LISTRIK',
     sub: 'Instalasi & Petir',
-    icon: 'lightning-bolt',
-    color: '#d97706',
-    route: 'PilihSubBidang',
+    icon: 'transmission-tower',
+    color: '#E65100', // Deep Orange
+    description: 'Panel, Genset, Petir',
   },
   {
     id: '4',
     title: 'FIRE',
     sub: 'Sistem Kebakaran',
-    icon: 'fire-extinguisher',
-    color: '#ea580c',
-    route: 'PilihSubBidang',
+    icon: 'fire-hydrant',
+    color: '#EA580C', // Safety Orange
+    description: 'APAR, Hydrant, Alarm',
   },
   {
     id: '5',
     title: 'PTP',
     sub: 'Tenaga & Produksi',
-    icon: 'engine-outline',
-    color: '#7c3aed',
-    route: 'PilihSubBidang',
+    icon: 'cog-refresh',
+    color: '#546E7A', // Industrial Grey
+    description: 'Mesin Produksi, Perkakas',
   },
   {
     id: '6',
     title: 'LIFT',
     sub: 'Elevator Eskalator',
     icon: 'elevator-passenger',
-    color: '#059669',
-    route: 'PilihSubBidang',
+    color: '#009639', // Safety Green
+    description: 'Lift Barang, Escalator',
   },
 ];
 
@@ -70,51 +79,78 @@ export default function PilihBidangScreen({ navigation }) {
 
   const renderItem = ({ item }) => (
     <TouchableOpacity
-      activeOpacity={0.7}
+      activeOpacity={0.8}
       style={styles.cardWrapper}
       onPress={() =>
         navigation.navigate('PilihSubBidang', {
-          bidangId: item.title, // Mengirim ID (Contoh: 'PAPA')
-          bidangTitle: item.sub, // Mengirim Judul Lengkap
+          bidangId: item.title,
+          bidangTitle: item.sub,
         })
       }
     >
       <Surface style={styles.card} elevation={2}>
-        {/* Lingkaran Ikon dengan Opacity Warna */}
+        {/* Dekorasi lingkaran transparan di pojok */}
+        <View
+          style={[
+            styles.circleDecor,
+            { backgroundColor: item.color, opacity: 0.08 },
+          ]}
+        />
+
+        {/* Icon Section dengan Background Soft */}
         <View
           style={[styles.iconContainer, { backgroundColor: item.color + '15' }]}
         >
           <MaterialCommunityIcons
             name={item.icon}
-            size={38}
+            size={42}
             color={item.color}
           />
         </View>
 
-        <Text style={[styles.cardTitle, { color: item.color }]}>
-          {item.title}
-        </Text>
-        <Text style={styles.cardSub}>{item.sub}</Text>
+        {/* Text Section */}
+        <View style={styles.textContainer}>
+          <Text style={[styles.cardTitle, { color: item.color }]}>
+            {item.title}
+          </Text>
+          <Text style={styles.cardSub}>{item.sub}</Text>
+          <Text style={styles.descriptionText}>{item.description}</Text>
+        </View>
 
-        {/* Dekorasi kecil di pojok kartu */}
-        <View style={[styles.badge, { backgroundColor: item.color }]} />
+        {/* Accent Bar di bagian bawah kartu */}
+        <View style={[styles.bottomBar, { backgroundColor: item.color }]} />
       </Surface>
     </TouchableOpacity>
   );
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={[styles.header, { backgroundColor: theme.colors.primary }]}>
-        <IconButton
-          icon="arrow-left"
-          iconColor="white"
-          onPress={() => navigation.goBack()}
-        />
-        <Text variant="titleLarge" style={styles.headerTitle}>
-          Pilih Bidang Inspeksi
-        </Text>
+      <StatusBar
+        barStyle="light-content"
+        backgroundColor={SAFETY_COLORS.primary}
+      />
+
+      {/* Header Modern */}
+      <View style={[styles.header, { backgroundColor: SAFETY_COLORS.primary }]}>
+        <View style={styles.headerTopRow}>
+          <IconButton
+            icon="arrow-left"
+            iconColor="white"
+            size={24}
+            onPress={() => navigation.goBack()}
+          />
+          <View style={styles.headerTextWrapper}>
+            <Text variant="headlineSmall" style={styles.headerTitle}>
+              Modul Inspeksi
+            </Text>
+            <Text style={styles.headerSubtitle}>
+              Pilih kategori bidang riksa uji K3
+            </Text>
+          </View>
+        </View>
       </View>
 
+      {/* Grid List */}
       <FlatList
         data={DATA_BIDANG}
         numColumns={2}
@@ -122,26 +158,44 @@ export default function PilihBidangScreen({ navigation }) {
         contentContainerStyle={styles.grid}
         renderItem={renderItem}
         showsVerticalScrollIndicator={false}
+        ListHeaderComponent={<View style={{ height: 15 }} />}
       />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f1f5f9' },
+  container: {
+    flex: 1,
+    backgroundColor: '#F8FAF7',
+  },
   header: {
     paddingTop: 40,
-    paddingBottom: 20,
+    paddingBottom: 30,
+    paddingHorizontal: 10,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    elevation: 8,
+  },
+  headerTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderBottomLeftRadius: 25,
-    borderBottomRightRadius: 25,
-    elevation: 4,
-    paddingHorizontal: 10,
   },
-  headerTitle: { color: 'white', fontWeight: 'bold' },
+  headerTextWrapper: {
+    marginLeft: 5,
+  },
+  headerTitle: {
+    color: 'white',
+    fontWeight: '900',
+    letterSpacing: 0.5,
+  },
+  headerSubtitle: {
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: 13,
+    fontWeight: '500',
+  },
   grid: {
-    padding: 12,
+    paddingHorizontal: 12,
     paddingBottom: 30,
   },
   cardWrapper: {
@@ -149,43 +203,63 @@ const styles = StyleSheet.create({
     margin: 8,
   },
   card: {
-    paddingVertical: 25,
-    paddingHorizontal: 10,
+    paddingTop: 25,
+    paddingBottom: 20,
+    paddingHorizontal: 12,
     backgroundColor: 'white',
     borderRadius: 24,
     alignItems: 'center',
     overflow: 'hidden',
-    height: 190, // Menyamakan tinggi semua kartu
-    justifyContent: 'center',
+    height: 210,
+    justifyContent: 'space-between',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  circleDecor: {
+    position: 'absolute',
+    top: -15,
+    right: -15,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
   },
   iconContainer: {
-    width: 75,
-    height: 75,
-    borderRadius: 37.5,
+    width: 80,
+    height: 80,
+    borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 15,
+    marginBottom: 5,
+  },
+  textContainer: {
+    alignItems: 'center',
+    flex: 1,
+    marginTop: 10,
   },
   cardTitle: {
-    fontWeight: 'bold',
+    fontWeight: '900',
     fontSize: 18,
-    letterSpacing: 0.8,
+    letterSpacing: 1,
   },
   cardSub: {
-    fontSize: 11,
-    color: '#64748b',
+    fontSize: 12,
+    color: '#475569',
+    textAlign: 'center',
+    marginTop: 2,
+    fontWeight: '800',
+  },
+  descriptionText: {
+    fontSize: 10,
+    color: '#94A3B8',
     textAlign: 'center',
     marginTop: 6,
-    fontWeight: '600',
-    paddingHorizontal: 5,
+    fontStyle: 'italic',
   },
-  badge: {
+  bottomBar: {
     position: 'absolute',
-    top: 0,
-    right: 0,
-    width: 45,
-    height: 45,
-    borderBottomLeftRadius: 45,
-    opacity: 0.1,
+    bottom: 0,
+    width: '100%',
+    height: 4,
+    opacity: 0.8,
   },
 });
