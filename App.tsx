@@ -2,35 +2,25 @@ import React, {
   useEffect,
   useState,
   createContext,
-  useContext,
   useMemo,
 } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ActivityIndicator, View } from 'react-native';
-import { initDatabase } from './src/services/db-service';
 import { PaperProvider, MD3LightTheme } from 'react-native-paper';
 import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator } from '@react-navigation/stack';
 import { createDrawerNavigator } from '@react-navigation/drawer';
+import { STORAGE_KEYS } from './src/config/api';
+import { authService } from './src/services/auth-service';
 
-// Import Screens (Sama seperti sebelumnya)
 import LoginScreen from './src/screens/Login/LoginScreen';
 import DashboardScreen from './src/screens/Dashboard/DashboardScreen';
 import Sidebar from './src/components/Sidebar';
 import JadwalRiksaScreen from './src/screens/Jadwal/JadwalRiksaScreen';
 import RiwayatScreen from './src/screens/Riwayat/RiwayatScreen';
-import DetailRiwayatScreen from './src/screens/Riwayat/DetailRiwayatScreen';
-import PilihBidangScreen from './src/screens/PilihBidangScreen';
-import PilihSubBidangScreen from './src/screens/PilihSubBidangScreen';
-import InputPapaScreen from './src/screens/Inspeksi/InputPapaScreen';
-import InputPubtScreen from './src/screens/Inspeksi/InputPubtScreen';
-import InputListrikScreen from './src/screens/Inspeksi/InputListrikScreen';
-import InputFireScreen from './src/screens/Inspeksi/InputFireScreen';
-import InputPtpScreen from './src/screens/Inspeksi/InputPtpScreen';
-import InputElevatorScreen from './src/screens/Inspeksi/InputElevatorScreen';
+import ExecutionScreen from './src/screens/Inspeksi/ExecutionScreen';
 
-// BUAT CONTEXT UNTUK AUTH
-export const AuthContext = createContext<any>(null);
+export const AuthContext = createContext(null);
 
 const Stack = createStackNavigator();
 const Drawer = createDrawerNavigator();
@@ -58,28 +48,41 @@ function DrawerNavigator() {
 
 export default function App() {
   const [isLoading, setIsLoading] = useState(true);
-  const [userToken, setUserToken] = useState<string | null>(null);
+  const [userToken, setUserToken] = useState(null);
+  const [user, setUser] = useState(null);
 
-  // Fungsi Login & Logout yang bisa dipanggil dari screen mana saja
   const authContext = useMemo(
     () => ({
-      signIn: async (token: string) => {
+      user,
+      signIn: async (token, userData) => {
+        await AsyncStorage.setItem(STORAGE_KEYS.TOKEN, token);
+        if (userData) {
+          await AsyncStorage.setItem(
+            STORAGE_KEYS.USER,
+            JSON.stringify(userData),
+          );
+          setUser(userData);
+        }
         setUserToken(token);
       },
       signOut: async () => {
-        await AsyncStorage.multiRemove(['userToken', 'userData']);
+        await authService.logout();
         setUserToken(null);
+        setUser(null);
       },
     }),
-    [],
+    [user],
   );
 
   useEffect(() => {
     const checkLoginStatus = async () => {
       try {
-        initDatabase();
-        const token = await AsyncStorage.getItem('userToken');
-        setUserToken(token);
+        const token = await authService.getStoredToken();
+        const storedUser = await authService.getStoredUser();
+        if (token) {
+          setUserToken(token);
+          setUser(storedUser);
+        }
       } catch (e) {
         console.log(e);
       } finally {
@@ -111,31 +114,10 @@ export default function App() {
                   name="JadwalRiksa"
                   component={JadwalRiksaScreen}
                 />
-                <Stack.Screen name="RiwayatScreen" component={RiwayatScreen} />
                 <Stack.Screen
-                  name="DetailRiwayat"
-                  component={DetailRiwayatScreen}
-                  options={{ headerShown: true, title: 'Detail Laporan' }}
-                />
-                <Stack.Screen
-                  name="PilihBidang"
-                  component={PilihBidangScreen}
-                />
-                <Stack.Screen
-                  name="PilihSubBidang"
-                  component={PilihSubBidangScreen}
-                />
-                <Stack.Screen name="InputPapa" component={InputPapaScreen} />
-                <Stack.Screen name="InputPubt" component={InputPubtScreen} />
-                <Stack.Screen
-                  name="InputListrik"
-                  component={InputListrikScreen}
-                />
-                <Stack.Screen name="InputFire" component={InputFireScreen} />
-                <Stack.Screen name="InputPtp" component={InputPtpScreen} />
-                <Stack.Screen
-                  name="InputElevator"
-                  component={InputElevatorScreen}
+                  name="Execution"
+                  component={ExecutionScreen}
+                  options={{ headerShown: false }}
                 />
               </>
             )}

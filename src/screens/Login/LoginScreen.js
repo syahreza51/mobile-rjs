@@ -14,8 +14,7 @@ import {
   StatusBar,
 } from 'react-native';
 import CustomInput from '../../components/CustomInput';
-import { db } from '../../services/db-service';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { authService } from '../../services/auth-service';
 import { AuthContext } from '../../../App';
 
 const SAFETY_COLORS = {
@@ -25,7 +24,7 @@ const SAFETY_COLORS = {
   background: '#F8FAFC',
 };
 
-export default function LoginScreen({ navigation }) {
+export default function LoginScreen() {
   const { signIn } = React.useContext(AuthContext);
   const { width } = useWindowDimensions();
   const isTablet = width > 600;
@@ -42,23 +41,14 @@ export default function LoginScreen({ navigation }) {
 
     setLoading(true);
     try {
-      const result = db.execute(
-        'SELECT * FROM users WHERE email = ? AND password = ?',
-        [email, password],
-      );
-
-      if (result.rows.length > 0) {
-        const user = result.rows.item(0);
-        await AsyncStorage.setItem('userToken', 'active');
-        await AsyncStorage.setItem('userData', JSON.stringify(user));
-
-        // Panggil fungsi signIn dari App.tsx
-        signIn('active');
-      } else {
-        Alert.alert('Gagal', 'Email atau Password salah.');
-      }
+      const { token, user } = await authService.login(email.trim(), password);
+      signIn(token, user);
     } catch (e) {
-      Alert.alert('Error', 'DB Error');
+      const message =
+        e.response?.data?.message ||
+        e.message ||
+        'Email atau password salah.';
+      Alert.alert('Gagal Login', message);
     } finally {
       setLoading(false);
     }
@@ -79,7 +69,6 @@ export default function LoginScreen({ navigation }) {
           showsVerticalScrollIndicator={false}
         >
           <View style={[styles.card, { maxWidth: isTablet ? 500 : '100%' }]}>
-            {/* Logo Area */}
             <View style={styles.header}>
               <View
                 style={[
@@ -103,7 +92,6 @@ export default function LoginScreen({ navigation }) {
               </Text>
             </View>
 
-            {/* Form Area */}
             <View style={styles.form}>
               <CustomInput
                 label="Email Inspector"
@@ -122,14 +110,9 @@ export default function LoginScreen({ navigation }) {
                 value={password}
                 onChangeText={setPassword}
                 returnKeyType="done"
-                // Fungsi Enter: tekan enter di keyboard langsung login
                 onSubmitEditing={handleLogin}
               />
             </View>
-
-            <TouchableOpacity style={styles.forgotBtn}>
-              <Text style={styles.forgotText}>Lupa Password?</Text>
-            </TouchableOpacity>
 
             <TouchableOpacity
               style={[
@@ -151,12 +134,11 @@ export default function LoginScreen({ navigation }) {
               </Text>
             </TouchableOpacity>
 
-            {/* Copyright / Footer Info */}
             <View style={styles.footer}>
               <Text style={styles.footerText}>
                 © 2025 PT. Riksa Jaya Swastika
               </Text>
-              <Text style={styles.versionText}>v2.1.0 Build Production</Text>
+              <Text style={styles.versionText}>v2.2.0 API Connected</Text>
             </View>
           </View>
         </ScrollView>
@@ -231,15 +213,6 @@ const styles = StyleSheet.create({
   },
   form: {
     width: '100%',
-  },
-  forgotBtn: {
-    alignItems: 'flex-end',
-    marginTop: 10,
-  },
-  forgotText: {
-    color: SAFETY_COLORS.primary,
-    fontWeight: '700',
-    fontSize: 13,
   },
   loginBtn: {
     backgroundColor: SAFETY_COLORS.primary,

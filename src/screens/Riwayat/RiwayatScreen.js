@@ -1,15 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   StyleSheet,
   FlatList,
   SafeAreaView,
-  Alert,
-  LayoutAnimation,
-  Platform,
-  UIManager,
   RefreshControl,
-  ScrollView,
   StatusBar,
 } from 'react-native';
 import {
@@ -21,130 +16,85 @@ import {
   Button,
   Surface,
 } from 'react-native-paper';
-import { db } from '../../services/db-service';
+import { useFocusEffect } from '@react-navigation/native';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
-
-if (
-  Platform.OS === 'android' &&
-  UIManager.setLayoutAnimationEnabledExperimental
-) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
+import { inspectionService } from '../../services/inspection-service';
 
 const SAFETY_COLORS = {
   primary: '#0055A4',
   background: '#F2F4F7',
   success: '#009639',
   danger: '#C8102E',
-  warning: '#E65100',
 };
+
+function flattenCompletedObjects(inspections) {
+  const rows = [];
+  inspections.forEach(insp => {
+    (insp.objects || []).forEach(obj => {
+      if (['completed', 'failed', 'done'].includes(obj.status_uji)) {
+        rows.push({
+          id: obj.id,
+          objectName:
+            obj.master_object?.name ||
+            obj.masterObject?.name ||
+            `Alat #${obj.id}`,
+          subSector:
+            obj.master_object?.sub_sector?.name ||
+            obj.masterObject?.subSector?.name ||
+            '-',
+          clientName: insp.client_name,
+          location: insp.location || '-',
+          scheduleDate: insp.schedule_date,
+          status: obj.status_uji,
+          inspectionId: insp.id,
+        });
+      }
+    });
+  });
+  return rows.sort(
+    (a, b) => new Date(b.scheduleDate || 0) - new Date(a.scheduleDate || 0),
+  );
+}
 
 export default function RiwayatScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [dataRiwayat, setDataRiwayat] = useState([]);
-  const [filteredData, setFilteredData] = useState([]);
-  const [selectedBidang, setSelectedBidang] = useState('SEMUA');
 
-  const DAFTAR_BIDANG = [
-    'SEMUA',
-    'PAPA',
-    'PUBT',
-    'LISTRIK',
-    'FIRE',
-    'PTP',
-    'LIFT',
-  ];
-
-  const loadData = useCallback(() => {
-    setLoading(true);
+  const loadData = useCallback(async () => {
     try {
-      const result = db.execute('SELECT * FROM inspections ORDER BY id DESC');
-      const rows = [];
-
-      if (result && result.rows) {
-        for (let i = 0; i < result.rows.length; i++) {
-          const item = result.rows.item(i);
-          let parsedData = {};
-          try {
-            parsedData = item.data ? JSON.parse(item.data) : {};
-          } catch (e) {
-            console.error('Error parse ID:', item.id);
-          }
-
-          rows.push({
-            dbId: item.id || Date.now() + i,
-            createdAt: item.created_at || '-',
-            bidang: item.bidang || parsedData.bidang || 'PAPA',
-            ...parsedData,
-          });
-        }
-      }
-      setDataRiwayat(rows);
-      applyFilter(selectedBidang, rows);
+      const inspections = await inspectionService.getMyInspections();
+      setDataRiwayat(flattenCompletedObjects(inspections));
     } catch (error) {
-      console.error('Gagal ambil data:', error);
+      console.error('Gagal ambil riwayat:', error);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  }, [selectedBidang]);
+  }, []);
 
-  const applyFilter = (bidang, fullData) => {
-    if (bidang === 'SEMUA') {
-      setFilteredData(fullData);
-    } else {
-      setFilteredData(fullData.filter(item => item.bidang === bidang));
-    }
-  };
-
-  useEffect(() => {
-    const unsubscribe = navigation.addListener('focus', loadData);
-    return unsubscribe;
-  }, [navigation, loadData]);
-
-  const filterByBidang = bidang => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setSelectedBidang(bidang);
-    applyFilter(bidang, dataRiwayat);
-  };
-
-  const handleDelete = item => {
-    Alert.alert(
-      'Hapus Riwayat',
-      'Data ini akan dihapus permanen dari database lokal.',
-      [
-        { text: 'Batal', style: 'cancel' },
-        {
-          text: 'Hapus',
-          style: 'destructive',
-          onPress: () => {
-            db.execute('DELETE FROM inspections WHERE id = ?', [item.dbId]);
-            loadData();
-          },
-        },
-      ],
-    );
-  };
+  useFocusEffect(
+    useCallback(() => {
+      setLoading(true);
+      loadData();
+    }, [loadData]),
+  );
 
   const renderItem = ({ item }) => {
-    const isLayak = item.statusKelayakan === 'LAYAK';
-    const statusColor = isLayak ? SAFETY_COLORS.success : SAFETY_COLORS.danger;
+    const isPass = item.status === 'completed';
+    const statusColor = isPass ? SAFETY_COLORS.success : SAFETY_COLORS.danger;
 
     return (
-      <Card
-        style={styles.card}
-        elevation={2}
-        onPress={() => navigation.navigate('DetailRiwayat', { data: item })}
-      >
+      <Card style={styles.card} elevation={2}>
         <View style={[styles.cardAccent, { backgroundColor: statusColor }]} />
         <Card.Content style={styles.cardContent}>
           <View style={styles.cardHeader}>
             <View style={{ flex: 1 }}>
               <Text numberOfLines={1} style={styles.companyName}>
-                {item.pemilik || item.namaPerusahaan || 'Objek Tanpa Nama'}
+                {item.clientName}
               </Text>
               <Text style={styles.dateText}>
-                <MaterialCommunityIcons name="calendar-clock" size={12} />{' '}
-                {item.tanggalInput || item.createdAt}
+                {item.objectName} • {item.subSector}
               </Text>
             </View>
             <Chip
@@ -154,25 +104,8 @@ export default function RiwayatScreen({ navigation }) {
                 { backgroundColor: SAFETY_COLORS.primary + '15' },
               ]}
             >
-              {item.bidang}
+              {item.status}
             </Chip>
-          </View>
-
-          <View style={styles.divider} />
-
-          <View style={styles.detailsGrid}>
-            <View style={styles.infoCol}>
-              <Text style={styles.infoLabel}>JENIS ALAT</Text>
-              <Text style={styles.infoValue} numberOfLines={1}>
-                {item.subAlat || 'Alat K3'}
-              </Text>
-            </View>
-            <View style={styles.infoCol}>
-              <Text style={styles.infoLabel}>STATUS KELAYAKAN</Text>
-              <Text style={[styles.statusValue, { color: statusColor }]}>
-                {isLayak ? 'BERFUNGSI BAIK' : 'BUTUH PERBAIKAN'}
-              </Text>
-            </View>
           </View>
 
           <View style={styles.locationRow}>
@@ -182,7 +115,7 @@ export default function RiwayatScreen({ navigation }) {
               color="#64748B"
             />
             <Text style={styles.locationText} numberOfLines={1}>
-              {item.lokasiUnit || item.alamat || 'Lokasi tidak terekam'}
+              {item.location}
             </Text>
           </View>
         </Card.Content>
@@ -192,17 +125,13 @@ export default function RiwayatScreen({ navigation }) {
             mode="text"
             compact
             textColor={SAFETY_COLORS.primary}
-            onPress={() => navigation.navigate('DetailRiwayat', { data: item })}
-            icon="file-find-outline"
+            onPress={() =>
+              navigation.navigate('Execution', { objectId: item.id })
+            }
+            icon="eye-outline"
           >
-            Lihat Detail
+            Lihat / Edit
           </Button>
-          <IconButton
-            icon="trash-can-outline"
-            iconColor="#94A3B8"
-            size={20}
-            onPress={() => handleDelete(item)}
-          />
         </Card.Actions>
       </Card>
     );
@@ -225,34 +154,8 @@ export default function RiwayatScreen({ navigation }) {
           onPress={() => navigation.goBack()}
         />
         <Text style={styles.headerTitle}>Riwayat Inspeksi</Text>
-        <IconButton icon="magnify" iconColor="white" onPress={() => {}} />
+        <View style={{ width: 48 }} />
       </Surface>
-
-      <View style={styles.filterSection}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterScroll}
-        >
-          {DAFTAR_BIDANG.map(bidang => (
-            <Chip
-              key={bidang}
-              selected={selectedBidang === bidang}
-              onPress={() => filterByBidang(bidang)}
-              style={[
-                styles.filterChip,
-                selectedBidang === bidang && {
-                  backgroundColor: SAFETY_COLORS.primary,
-                },
-              ]}
-              selectedColor="white"
-              showSelectedOverlay
-            >
-              {bidang}
-            </Chip>
-          ))}
-        </ScrollView>
-      </View>
 
       {loading && dataRiwayat.length === 0 ? (
         <View style={styles.center}>
@@ -263,14 +166,17 @@ export default function RiwayatScreen({ navigation }) {
         </View>
       ) : (
         <FlatList
-          data={filteredData}
-          keyExtractor={item => item.dbId.toString()}
+          data={dataRiwayat}
+          keyExtractor={item => String(item.id)}
           renderItem={renderItem}
           contentContainerStyle={styles.listContent}
           refreshControl={
             <RefreshControl
-              refreshing={loading}
-              onRefresh={loadData}
+              refreshing={refreshing}
+              onRefresh={() => {
+                setRefreshing(true);
+                loadData();
+              }}
               colors={[SAFETY_COLORS.primary]}
             />
           }
@@ -281,13 +187,13 @@ export default function RiwayatScreen({ navigation }) {
                 size={80}
                 color="#CBD5E1"
               />
-              <Text style={styles.emptyText}>Belum ada data riwayat</Text>
+              <Text style={styles.emptyText}>Belum ada inspeksi selesai</Text>
               <Button
                 mode="contained"
                 style={{ marginTop: 20 }}
-                onPress={() => navigation.navigate('PilihBidang')}
+                onPress={() => navigation.navigate('JadwalRiksa')}
               >
-                Mulai Inspeksi
+                Lihat Jadwal
               </Button>
             </View>
           }
@@ -308,13 +214,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 5,
   },
   headerTitle: { color: 'white', fontWeight: 'bold', fontSize: 18 },
-  filterSection: {
-    backgroundColor: 'white',
-    paddingVertical: 12,
-    elevation: 2,
-  },
-  filterScroll: { paddingHorizontal: 15 },
-  filterChip: { marginRight: 8, height: 35 },
   listContent: { padding: 15, paddingBottom: 30 },
   card: {
     marginBottom: 16,
@@ -340,38 +239,18 @@ const styles = StyleSheet.create({
   dateText: { color: '#64748B', fontSize: 11 },
   bidangChip: { borderRadius: 8, height: 28 },
   chipText: { fontSize: 10, fontWeight: 'bold', color: SAFETY_COLORS.primary },
-  divider: { height: 1, backgroundColor: '#F1F5F9', marginVertical: 12 },
-  detailsGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  infoCol: { flex: 1 },
-  infoLabel: {
-    fontSize: 9,
-    color: '#94A3B8',
-    fontWeight: 'bold',
-    letterSpacing: 0.5,
-  },
-  infoValue: {
-    fontSize: 13,
-    color: '#334155',
-    fontWeight: '700',
-    marginTop: 2,
-  },
-  statusValue: { fontSize: 13, fontWeight: '900', marginTop: 2 },
   locationRow: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F8FAFC',
     padding: 8,
     borderRadius: 8,
+    marginTop: 12,
   },
   locationText: { color: '#64748B', fontSize: 11, marginLeft: 6, flex: 1 },
   cardActions: {
     borderTopWidth: 1,
     borderTopColor: '#F1F5F9',
-    justifyContent: 'space-between',
     paddingHorizontal: 8,
   },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },

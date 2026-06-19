@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   StyleSheet,
@@ -9,37 +9,78 @@ import {
   StatusBar,
   Dimensions,
   TouchableOpacity,
+  RefreshControl,
 } from 'react-native';
-import { Text, Card, Avatar, IconButton, Surface } from 'react-native-paper';
+import { Text, Card, IconButton, Surface } from 'react-native-paper';
 import NetInfo from '@react-native-community/netinfo';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { AuthContext } from '../../../App';
+import { inspectionService } from '../../services/inspection-service';
 
 const { width } = Dimensions.get('window');
 
-// Palet Warna Standar K3 (Safety Colors)
 const SAFETY_COLORS = {
-  primary: '#0055A4', // Safety Blue (Mandatory/Informasi)
-  warning: '#F9D71C', // Safety Yellow (Waspada/Caution)
-  success: '#009639', // Safety Green (Aman/Safe Condition)
-  danger: '#C8102E', // Safety Red (Bahaya/Stop)
-  background: '#F2F4F7', // Abu-abu muda bersih
+  primary: '#0055A4',
+  warning: '#F9D71C',
+  success: '#009639',
+  danger: '#C8102E',
+  background: '#F2F4F7',
   textDark: '#1E293B',
   textLight: '#BBDEFB',
 };
 
+function computeStats(inspections) {
+  let totalObjects = 0;
+  let pending = 0;
+  let completed = 0;
+
+  inspections.forEach(insp => {
+    const objects = insp.objects || [];
+    totalObjects += objects.length;
+    objects.forEach(obj => {
+      if (['completed', 'failed', 'done'].includes(obj.status_uji)) {
+        completed += 1;
+      } else {
+        pending += 1;
+      }
+    });
+  });
+
+  return {
+    total: totalObjects || inspections.length,
+    pending,
+    completed,
+  };
+}
+
 export default function DashboardScreen({ navigation }) {
-  const { signOut } = React.useContext(AuthContext);
+  const { signOut, user } = React.useContext(AuthContext);
   const [isConnected, setIsConnected] = useState(true);
-  const auth = React.useContext(AuthContext);
+  const [refreshing, setRefreshing] = useState(false);
+  const [stats, setStats] = useState({ total: 0, pending: 0, completed: 0 });
+
+  const loadStats = useCallback(async () => {
+    try {
+      const inspections = await inspectionService.getMyInspections();
+      setStats(computeStats(inspections));
+    } catch (error) {
+      console.error('Gagal load stats:', error);
+    }
+  }, []);
 
   useEffect(() => {
     const unsubscribe = NetInfo.addEventListener(state => {
       setIsConnected(state.isConnected);
     });
+    loadStats();
     return () => unsubscribe();
-  }, []);
+  }, [loadStats]);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadStats();
+    setRefreshing(false);
+  };
 
   const handleLogout = () => {
     Alert.alert(
@@ -52,18 +93,7 @@ export default function DashboardScreen({ navigation }) {
           style: 'destructive',
           onPress: async () => {
             try {
-              if (auth && auth.signOut) {
-                await auth.signOut();
-              } else {
-                // Fallback jika context gagal (Silent Error Fix)
-                console.error('AuthContext tidak ditemukan');
-                await AsyncStorage.multiRemove(['userToken', 'userData']);
-                // Force reset jika context tidak tersedia
-                navigation.reset({
-                  index: 0,
-                  routes: [{ name: 'Login' }],
-                });
-              }
+              await signOut();
             } catch (error) {
               console.error('Error saat logout:', error);
             }
@@ -75,15 +105,20 @@ export default function DashboardScreen({ navigation }) {
 
   const QUICK_STATS = [
     {
-      label: 'Total Riksa',
-      value: '124',
+      label: 'Total Alat',
+      value: String(stats.total),
       icon: 'shield-check',
       color: SAFETY_COLORS.primary,
     },
-    { label: 'Pending', value: '8', icon: 'alert-decagram', color: '#E65100' }, // Orange Warning
+    {
+      label: 'Pending',
+      value: String(stats.pending),
+      icon: 'alert-decagram',
+      color: '#E65100',
+    },
     {
       label: 'Selesai',
-      value: '42',
+      value: String(stats.completed),
       icon: 'check-circle',
       color: SAFETY_COLORS.success,
     },
@@ -92,37 +127,23 @@ export default function DashboardScreen({ navigation }) {
   const MENU_DATA = [
     {
       id: 1,
-      title: 'Input Data',
-      icon: 'clipboard-edit-outline',
-      desc: 'Mulai Inspeksi Baru',
-      screen: 'PilihBidang',
+      title: 'Jadwal Kerja',
+      icon: 'calendar-clock',
+      desc: 'Penugasan riksa uji lapangan',
+      screen: 'JadwalRiksa',
       color: SAFETY_COLORS.primary,
     },
     {
       id: 2,
-      title: 'Jadwal Kerja',
-      icon: 'calendar-clock',
-      desc: 'Antrean Riksa Uji',
-      screen: 'JadwalRiksa',
-      color: '#546E7A',
-    },
-    {
-      id: 3,
       title: 'Riwayat',
       icon: 'database-search',
-      desc: 'Cek data tersimpan',
+      desc: 'Inspeksi yang sudah selesai',
       screen: 'Riwayat',
       color: '#455A64',
     },
-    {
-      id: 4,
-      title: 'Laporan PDF',
-      icon: 'file-pdf-box',
-      desc: 'Grafik & Statistik',
-      screen: 'Laporan',
-      color: SAFETY_COLORS.danger,
-    },
   ];
+
+  const userName = user?.name || 'Inspector';
 
   return (
     <SafeAreaView style={styles.container}>
@@ -131,7 +152,6 @@ export default function DashboardScreen({ navigation }) {
         backgroundColor={SAFETY_COLORS.primary}
       />
 
-      {/* Header Section */}
       <View style={[styles.header, { backgroundColor: SAFETY_COLORS.primary }]}>
         <View style={styles.headerTop}>
           <View style={styles.logoAndTitleContainer}>
@@ -164,7 +184,7 @@ export default function DashboardScreen({ navigation }) {
                 { color: isConnected ? '#4ADE80' : '#FFCDD2' },
               ]}
             >
-              {isConnected ? 'Sistem Online' : 'Offline'}
+              {isConnected ? 'Online' : 'Offline'}
             </Text>
           </Surface>
         </View>
@@ -172,16 +192,13 @@ export default function DashboardScreen({ navigation }) {
         <View style={styles.profileSection}>
           <View>
             <Text style={styles.greetingText}>Inspector On Duty,</Text>
-            <Text style={styles.userNameText}>Andi Inspector</Text>
+            <Text style={styles.userNameText}>{userName}</Text>
           </View>
-          <Avatar.Image
-            size={60}
-            source={{ uri: 'https://i.pravatar.cc/300' }}
-            style={styles.avatar}
-          />
+          <Surface style={styles.avatarPlaceholder} elevation={2}>
+            <MaterialCommunityIcons name="account-hard-hat" size={32} color="#0055A4" />
+          </Surface>
         </View>
 
-        {/* Stats Section Overlay */}
         <View style={styles.statsContainer}>
           {QUICK_STATS.map((stat, index) => (
             <Surface key={index} style={styles.statCard} elevation={2}>
@@ -203,11 +220,13 @@ export default function DashboardScreen({ navigation }) {
       <ScrollView
         style={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+        }
       >
         <View style={styles.menuGrid}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Modul Pemeriksaan</Text>
-            <IconButton icon="dots-vertical" size={20} />
           </View>
 
           {MENU_DATA.map(item => (
@@ -243,7 +262,6 @@ export default function DashboardScreen({ navigation }) {
           ))}
         </View>
 
-        {/* Safety Banner */}
         <Surface style={styles.safetyBanner} elevation={1}>
           <IconButton
             icon="bullhorn-variant"
@@ -255,7 +273,6 @@ export default function DashboardScreen({ navigation }) {
           </Text>
         </Surface>
 
-        {/* Footer */}
         <View style={styles.footerSection}>
           <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
             <MaterialCommunityIcons
@@ -266,7 +283,7 @@ export default function DashboardScreen({ navigation }) {
             <Text style={styles.logoutText}>Keluar Sesi</Text>
           </TouchableOpacity>
           <Text style={styles.versionText}>
-            RJS Mobile v2.1.0 • Technical Support
+            RJS Mobile v2.2.0 • API Connected
           </Text>
         </View>
 
@@ -336,11 +353,15 @@ const styles = StyleSheet.create({
     color: 'white',
     fontWeight: 'bold',
     fontSize: 28,
-    textShadowColor: 'rgba(0, 0, 0, 0.25)',
-    textShadowOffset: { width: 1, height: 1 },
-    textShadowRadius: 3,
   },
-  avatar: { backgroundColor: '#fff', elevation: 5 },
+  avatarPlaceholder: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#fff',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   statsContainer: {
     position: 'absolute',
     bottom: -50,
@@ -384,9 +405,6 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     marginBottom: 14,
     elevation: 3,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
   },
   menuRow: {
     flexDirection: 'row',
