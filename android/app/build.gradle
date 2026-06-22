@@ -77,13 +77,13 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace "com.inspectorrjs"
+    namespace "id.co.riksajayaswastika.inspector"
     defaultConfig {
-        applicationId "com.inspectorrjs"
+        applicationId "id.co.riksajayaswastika.inspector"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode 22
+        versionName "2.2.0"
     }
     signingConfigs {
         debug {
@@ -107,9 +107,10 @@ android {
             signingConfig signingConfigs.debug
         }
         release {
-            // Pastikan hanya ada SATU baris signingConfig di sini
-            signingConfig signingConfigs.release
-            
+            // Pakai debug keystore untuk distribusi internal.
+            // Ganti dengan signingConfigs.release + keystore sendiri untuk Play Store.
+            signingConfig signingConfigs.debug
+
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
         }

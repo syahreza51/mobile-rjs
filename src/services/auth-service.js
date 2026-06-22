@@ -46,4 +46,19 @@ export const authService = {
   getStoredToken: async () => {
     return AsyncStorage.getItem(STORAGE_KEYS.TOKEN);
   },
+
+  changePassword: async (currentPassword, newPassword, newPasswordConfirmation) => {
+    const response = await apiClient.post('/profile/change-password', {
+      current_password: currentPassword,
+      new_password: newPassword,
+      new_password_confirmation: newPasswordConfirmation,
+    });
+    return response.data;
+  },
+
+  refreshSession: async () => {
+    const token = await AsyncStorage.getItem(STORAGE_KEYS.TOKEN);
+    if (!token) return null;
+    return authService.getMe();
+  },
 };

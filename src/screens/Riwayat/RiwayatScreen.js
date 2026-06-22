@@ -5,54 +5,113 @@ import {
   FlatList,
   SafeAreaView,
   RefreshControl,
-  StatusBar,
+  Alert,
 } from 'react-native';
-import {
-  Text,
-  Card,
-  IconButton,
-  Chip,
-  ActivityIndicator,
-  Button,
-  Surface,
-} from 'react-native-paper';
+import { Text, Button, Surface } from 'react-native-paper';
 import { useFocusEffect } from '@react-navigation/native';
 import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
 import { inspectionService } from '../../services/inspection-service';
-
-const SAFETY_COLORS = {
-  primary: '#0055A4',
-  background: '#F2F4F7',
-  success: '#009639',
-  danger: '#C8102E',
-};
+import {
+  getObjectDisplayInfo,
+  formatBidangLabel,
+} from '../../lib/inspection-object';
+import ScreenHeader from '../../components/ui/ScreenHeader';
+import EmptyState from '../../components/ui/EmptyState';
+import LoadingScreen from '../../components/ui/LoadingScreen';
+import StatusChip from '../../components/ui/StatusChip';
+import { colors, radius, spacing, shadow } from '../../theme';
 
 function flattenCompletedObjects(inspections) {
   const rows = [];
   inspections.forEach(insp => {
     (insp.objects || []).forEach(obj => {
       if (['completed', 'failed', 'done'].includes(obj.status_uji)) {
+        const info = getObjectDisplayInfo(obj);
         rows.push({
           id: obj.id,
-          objectName:
-            obj.master_object?.name ||
-            obj.masterObject?.name ||
-            `Alat #${obj.id}`,
-          subSector:
-            obj.master_object?.sub_sector?.name ||
-            obj.masterObject?.subSector?.name ||
-            '-',
+          objectName: info.name,
+          subSector: info.subSector || '-',
+          bidang: formatBidangLabel(info),
           clientName: insp.client_name,
-          location: insp.location || '-',
+          location: info.location || insp.location || '-',
           scheduleDate: insp.schedule_date,
           status: obj.status_uji,
-          inspectionId: insp.id,
         });
       }
     });
   });
   return rows.sort(
     (a, b) => new Date(b.scheduleDate || 0) - new Date(a.scheduleDate || 0),
+  );
+}
+
+function formatDate(dateStr) {
+  if (!dateStr) return '-';
+  try {
+    return new Date(dateStr).toLocaleDateString('id-ID', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
+  } catch {
+    return dateStr;
+  }
+}
+
+function HistoryCard({ item, onPress }) {
+  const isPass = ['completed', 'done'].includes(item.status);
+
+  return (
+    <Surface style={styles.card} elevation={2}>
+      <View style={[styles.accent, { backgroundColor: isPass ? colors.accent : colors.danger }]} />
+      <View style={styles.cardBody}>
+        <View style={styles.cardTop}>
+          <View style={styles.iconWrap}>
+            <MaterialCommunityIcons
+              name={isPass ? 'check-decagram' : 'alert-circle-outline'}
+              size={24}
+              color={isPass ? colors.accent : colors.danger}
+            />
+          </View>
+          <View style={styles.cardMain}>
+            <Text style={styles.objectName} numberOfLines={1}>
+              {item.objectName}
+            </Text>
+            <Text style={styles.clientName} numberOfLines={1}>
+              {item.clientName}
+            </Text>
+          </View>
+          <StatusChip status={item.status} />
+        </View>
+
+        <View style={styles.metaRow}>
+          <MaterialCommunityIcons name="domain" size={14} color={colors.primary} />
+          <Text style={styles.metaText}>{item.bidang}</Text>
+        </View>
+        <View style={styles.metaRow}>
+          <MaterialCommunityIcons name="shape-outline" size={14} color={colors.accent} />
+          <Text style={styles.metaText}>{item.subSector}</Text>
+        </View>
+        <View style={styles.metaRow}>
+          <MaterialCommunityIcons name="map-marker-outline" size={14} color={colors.textMuted} />
+          <Text style={styles.metaText} numberOfLines={1}>{item.location}</Text>
+        </View>
+        <View style={styles.metaRow}>
+          <MaterialCommunityIcons name="calendar-outline" size={14} color={colors.textMuted} />
+          <Text style={styles.metaText}>{formatDate(item.scheduleDate)}</Text>
+        </View>
+
+        <Button
+          mode="contained-tonal"
+          icon="eye-outline"
+          onPress={onPress}
+          style={styles.viewBtn}
+          compact
+        >
+          Lihat Detail
+        </Button>
+      </View>
+    </Surface>
   );
 }
 
@@ -63,10 +122,13 @@ export default function RiwayatScreen({ navigation }) {
 
   const loadData = useCallback(async () => {
     try {
-      const inspections = await inspectionService.getMyInspections();
-      setDataRiwayat(flattenCompletedObjects(inspections));
+      const result = await inspectionService.getMyInspections({ limit: 50 });
+      setDataRiwayat(flattenCompletedObjects(result.items));
     } catch (error) {
-      console.error('Gagal ambil riwayat:', error);
+      Alert.alert(
+        'Gagal',
+        error.response?.data?.message || 'Tidak dapat memuat riwayat.',
+      );
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -80,180 +142,88 @@ export default function RiwayatScreen({ navigation }) {
     }, [loadData]),
   );
 
-  const renderItem = ({ item }) => {
-    const isPass = item.status === 'completed';
-    const statusColor = isPass ? SAFETY_COLORS.success : SAFETY_COLORS.danger;
-
-    return (
-      <Card style={styles.card} elevation={2}>
-        <View style={[styles.cardAccent, { backgroundColor: statusColor }]} />
-        <Card.Content style={styles.cardContent}>
-          <View style={styles.cardHeader}>
-            <View style={{ flex: 1 }}>
-              <Text numberOfLines={1} style={styles.companyName}>
-                {item.clientName}
-              </Text>
-              <Text style={styles.dateText}>
-                {item.objectName} • {item.subSector}
-              </Text>
-            </View>
-            <Chip
-              textStyle={styles.chipText}
-              style={[
-                styles.bidangChip,
-                { backgroundColor: SAFETY_COLORS.primary + '15' },
-              ]}
-            >
-              {item.status}
-            </Chip>
-          </View>
-
-          <View style={styles.locationRow}>
-            <MaterialCommunityIcons
-              name="map-marker-outline"
-              size={14}
-              color="#64748B"
-            />
-            <Text style={styles.locationText} numberOfLines={1}>
-              {item.location}
-            </Text>
-          </View>
-        </Card.Content>
-
-        <Card.Actions style={styles.cardActions}>
-          <Button
-            mode="text"
-            compact
-            textColor={SAFETY_COLORS.primary}
-            onPress={() =>
-              navigation.navigate('Execution', { objectId: item.id })
-            }
-            icon="eye-outline"
-          >
-            Lihat / Edit
-          </Button>
-        </Card.Actions>
-      </Card>
-    );
-  };
+  if (loading && dataRiwayat.length === 0) {
+    return <LoadingScreen message="Memuat riwayat inspeksi..." />;
+  }
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar
-        barStyle="light-content"
-        backgroundColor={SAFETY_COLORS.primary}
+      <ScreenHeader
+        title="Riwayat Inspeksi"
+        subtitle={`${dataRiwayat.length} pekerjaan selesai`}
+        onMenu={() => navigation.openDrawer()}
       />
 
-      <Surface
-        style={[styles.header, { backgroundColor: SAFETY_COLORS.primary }]}
-        elevation={4}
-      >
-        <IconButton
-          icon="arrow-left"
-          iconColor="white"
-          onPress={() => navigation.goBack()}
-        />
-        <Text style={styles.headerTitle}>Riwayat Inspeksi</Text>
-        <View style={{ width: 48 }} />
-      </Surface>
-
-      {loading && dataRiwayat.length === 0 ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={SAFETY_COLORS.primary} />
-          <Text style={{ marginTop: 10, color: '#64748B' }}>
-            Memuat riwayat...
-          </Text>
-        </View>
-      ) : (
-        <FlatList
-          data={dataRiwayat}
-          keyExtractor={item => String(item.id)}
-          renderItem={renderItem}
-          contentContainerStyle={styles.listContent}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={() => {
-                setRefreshing(true);
-                loadData();
-              }}
-              colors={[SAFETY_COLORS.primary]}
-            />
-          }
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <MaterialCommunityIcons
-                name="clipboard-text-search-outline"
-                size={80}
-                color="#CBD5E1"
-              />
-              <Text style={styles.emptyText}>Belum ada inspeksi selesai</Text>
-              <Button
-                mode="contained"
-                style={{ marginTop: 20 }}
-                onPress={() => navigation.navigate('JadwalRiksa')}
-              >
-                Lihat Jadwal
-              </Button>
-            </View>
-          }
-        />
-      )}
+      <FlatList
+        data={dataRiwayat}
+        keyExtractor={item => String(item.id)}
+        renderItem={({ item }) => (
+          <HistoryCard
+            item={item}
+            onPress={() =>
+              navigation.getParent()?.navigate('Execution', {
+                objectId: item.id,
+              })
+            }
+          />
+        )}
+        contentContainerStyle={styles.list}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              setRefreshing(true);
+              loadData();
+            }}
+            colors={[colors.primary]}
+          />
+        }
+        ListEmptyComponent={
+          <EmptyState
+            icon="clipboard-check-outline"
+            title="Belum ada inspeksi selesai"
+            description="Pekerjaan yang sudah diselesaikan akan muncul di sini."
+            actionLabel="Lihat Jadwal Kerja"
+            onAction={() => navigation.getParent()?.navigate('JadwalRiksa')}
+          />
+        }
+      />
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: SAFETY_COLORS.background },
-  header: {
-    paddingTop: StatusBar.currentHeight || 20,
-    paddingBottom: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 5,
-  },
-  headerTitle: { color: 'white', fontWeight: 'bold', fontSize: 18 },
-  listContent: { padding: 15, paddingBottom: 30 },
+  container: { flex: 1, backgroundColor: colors.background },
+  list: { padding: spacing.lg, paddingBottom: spacing.xxl },
   card: {
-    marginBottom: 16,
-    backgroundColor: 'white',
-    borderRadius: 16,
+    marginBottom: spacing.md,
+    borderRadius: radius.lg,
+    backgroundColor: colors.surface,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: colors.border,
+    ...shadow.card,
   },
-  cardAccent: { height: 4, width: '100%' },
-  cardContent: { paddingTop: 15 },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
+  accent: { height: 4 },
+  cardBody: { padding: spacing.lg },
+  cardTop: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md, marginBottom: spacing.md },
+  iconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: radius.md,
+    backgroundColor: colors.surfaceMuted,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  companyName: {
-    fontWeight: 'bold',
-    fontSize: 17,
-    color: '#1E293B',
-    marginBottom: 2,
-  },
-  dateText: { color: '#64748B', fontSize: 11 },
-  bidangChip: { borderRadius: 8, height: 28 },
-  chipText: { fontSize: 10, fontWeight: 'bold', color: SAFETY_COLORS.primary },
-  locationRow: {
+  cardMain: { flex: 1 },
+  objectName: { fontSize: 16, fontWeight: '800', color: colors.text },
+  clientName: { fontSize: 12, color: colors.textMuted, marginTop: 2 },
+  metaRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
-    padding: 8,
-    borderRadius: 8,
-    marginTop: 12,
+    gap: spacing.sm,
+    marginBottom: spacing.xs,
   },
-  locationText: { color: '#64748B', fontSize: 11, marginLeft: 6, flex: 1 },
-  cardActions: {
-    borderTopWidth: 1,
-    borderTopColor: '#F1F5F9',
-    paddingHorizontal: 8,
-  },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  emptyContainer: { alignItems: 'center', marginTop: 100 },
-  emptyText: { color: '#94A3B8', marginTop: 15, fontSize: 16 },
+  metaText: { flex: 1, fontSize: 12, color: colors.textSecondary },
+  viewBtn: { marginTop: spacing.md, borderRadius: radius.sm },
 });

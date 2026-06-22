@@ -3,9 +3,16 @@ import apiClient from './api-client';
 export const inspectionService = {
   getMyInspections: async (params = {}) => {
     const response = await apiClient.get('/office/inspections', {
-      params: { assigned_to_me: 1, limit: 50, ...params },
+      params: { assigned_to_me: 1, limit: 20, ...params },
     });
-    return response.data?.data?.data || [];
+    const payload = response.data?.data;
+    const items = payload?.data || payload || [];
+    return {
+      items: Array.isArray(items) ? items : [],
+      currentPage: payload?.current_page || 1,
+      lastPage: payload?.last_page || 1,
+      total: payload?.total || (Array.isArray(items) ? items.length : 0),
+    };
   },
 
   getExecutionData: async inspectionObjectId => {
